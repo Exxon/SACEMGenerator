@@ -1,0 +1,560 @@
+{
+    "Titre": "Cadeau",
+    "SousTitre": "",
+    "Interprete": "",
+    "Duree": "00:02:34",
+    "Genre": "Chant",
+    "Date": "14/02/2025",
+    "ISWC": "",
+    "Lieu": "Deezer / Spotify / Amazon Music / Youtube/ Apple Music",
+    "Territoire": "",
+    "Arrangement": "",
+    "Inegalitaire": "TRUE",
+    "Commentaire": "ISRC:",
+    "Faita": "Paris",
+    "Faitle": "13/03/2025",
+    "Declaration": "BELLUM PUBLISHING",
+    "Format": "BELLUM PUBLISHING",
+    "AyantsDroit": [
+        {
+            "Identite": {
+                "Type": "Physique",
+                "SocieteGestion": "SACEM",
+                "Pseudonyme": "SAAMOU",
+                "Nom": "SISSOKO",
+                "Prenom": "Moussa",
+                "Genre": "MR",
+                "Nele": "",
+                "Nea": ""
+            },
+            "BDO": {
+                "Role": "A",
+                "Lettrage": "A",
+                "COAD/IPI": "IPI: 1128567739",
+                "PH": "12.5",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "43",
+                "TypeVoie": "avenue",
+                "NomVoie": "du Président Wilson",
+                "CP": "93100",
+                "Ville": "Montreuil",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "moussa.prosissoko@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "TH RECORDS",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "1000",
+                "RCS": "Paris",
+                "Siren": "921728556",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Moussa",
+                "NomRepresentant": "SISSOKO",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "A",
+                "COAD/IPI": "",
+                "PH": "6.25",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "1",
+                "TypeVoie": "impasse",
+                "NomVoie": "Petin",
+                "CP": "75019",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "moussa.prosissoko@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "BELLUM PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "EURL",
+                "Capital": "1000",
+                "RCS": "Nanterre",
+                "Siren": "853105048",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Antoine",
+                "NomRepresentant": "BASSE",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "A",
+                "COAD/IPI": "COAD :1047037384",
+                "PH": "6.25",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "77",
+                "TypeVoie": "allée",
+                "NomVoie": "Georges Askinazi",
+                "CP": "92100",
+                "Ville": "Boulogne Billancourt",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "backtobellum@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Type": "Physique",
+                "SocieteGestion": "SACEM",
+                "Pseudonyme": "GENEZIO",
+                "Nom": "MAKANGOU",
+                "Prenom": "Yoan",
+                "Genre": "MR",
+                "Nele": "",
+                "Nea": ""
+            },
+            "BDO": {
+                "Role": "A",
+                "Lettrage": "B",
+                "COAD/IPI": "IPI : 1111829783",
+                "PH": "12.5",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "32",
+                "TypeVoie": "rue",
+                "NomVoie": "Gaston",
+                "CP": "91230",
+                "Ville": "Montgeron",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "Genezio.officiel@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "JOUUUE PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "3000",
+                "RCS": "Bobigny",
+                "Siren": "849668256",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Guillaume",
+                "NomRepresentant": "SILVESTRI",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "B",
+                "COAD/IPI": "IPI : 383996498",
+                "PH": "12.5",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "59 ter",
+                "TypeVoie": "rue",
+                "NomVoie": "heurtaults",
+                "CP": "93300",
+                "Ville": "Aubervillier",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "Guillaume.silvestri@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Type": "Physique",
+                "SocieteGestion": "SACEM",
+                "Pseudonyme": "ELIYEL",
+                "Nom": "KHOURY - RODRIGUEZ",
+                "Prenom": "Andy",
+                "Genre": "MR",
+                "Nele": "",
+                "Nea": ""
+            },
+            "BDO": {
+                "Role": "C",
+                "Lettrage": "C",
+                "COAD/IPI": "",
+                "PH": "8.33",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "2",
+                "TypeVoie": "Allée",
+                "NomVoie": "de l'église",
+                "CP": "93340",
+                "Ville": "Le Raincy",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "khouryandy@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "3051152",
+                "RCS": "Paris",
+                "Siren": "334416070",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Matthieu",
+                "NomRepresentant": "TESSIER",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "C",
+                "COAD/IPI": "IPI : 215772668",
+                "PH": "4.165",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "118-126",
+                "TypeVoie": "rue",
+                "NomVoie": "du mont Cenis",
+                "CP": "75018",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "antoine.mazzega@warnerchappell.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "LE PACTE PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "1000",
+                "RCS": "PARIS",
+                "Siren": "944404086",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Andy",
+                "NomRepresentant": "KHOURY-RODRIGUEZ",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "C",
+                "COAD/IPI": "",
+                "PH": "2.92",
+                "Managelic": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Managesub": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "59",
+                "TypeVoie": "rue",
+                "NomVoie": "de Ponthieu",
+                "CP": "75008",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "khouryandy@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "LONGUE VIE PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SASU",
+                "Capital": "100",
+                "RCS": "PARIS",
+                "Siren": "940571730",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Landry",
+                "NomRepresentant": "AGONHOUMEY",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "C",
+                "COAD/IPI": "",
+                "PH": "1.25",
+                "Managelic": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Managesub": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "61",
+                "TypeVoie": "rue",
+                "NomVoie": "de Lyon",
+                "CP": "75012",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "landry@longuevie.co",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Type": "Physique",
+                "SocieteGestion": "SACEM",
+                "Pseudonyme": "SOKOL",
+                "Nom": "EMAM",
+                "Prenom": "Bahi",
+                "Genre": "MR",
+                "Nele": "",
+                "Nea": ""
+            },
+            "BDO": {
+                "Role": "C",
+                "Lettrage": "D",
+                "COAD/IPI": "",
+                "PH": "8.33",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "",
+                "TypeVoie": "res",
+                "NomVoie": "Château des Perriers",
+                "CP": "93370",
+                "Ville": "Montfermeil",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "sokol.prodz@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "3051152",
+                "RCS": "Paris",
+                "Siren": "334416070",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Matthieu",
+                "NomRepresentant": "TESSIER",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "D",
+                "COAD/IPI": "IPI : 215772668",
+                "PH": "4.165",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "118-126",
+                "TypeVoie": "rue",
+                "NomVoie": "du mont Cenis",
+                "CP": "75018",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "antoine.mazzega@warnerchappell.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "LE PACTE PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SAS",
+                "Capital": "1000",
+                "RCS": "PARIS",
+                "Siren": "944404086",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Andy",
+                "NomRepresentant": "KHOURY-RODRIGUEZ",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "D",
+                "COAD/IPI": "",
+                "PH": "2.92",
+                "Managelic": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Managesub": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "59",
+                "TypeVoie": "rue",
+                "NomVoie": "de Ponthieu",
+                "CP": "75008",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "khouryandy@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "LONGUE VIE PUBLISHING",
+                "Type": "Moral",
+                "SocieteGestion": "SACEM",
+                "FormeJuridique": "SASU",
+                "Capital": "100",
+                "RCS": "PARIS",
+                "Siren": "940571730",
+                "GenreRepresentant": "MR",
+                "PrenomRepresentant": "Landry",
+                "NomRepresentant": "AGONHOUMEY",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "D",
+                "COAD/IPI": "",
+                "PH": "1.25",
+                "Managelic": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "Managesub": "WARNER CHAPPELL MUSIC FRANCE (WCMF)",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "61",
+                "TypeVoie": "rue",
+                "NomVoie": "de Lyon",
+                "CP": "75012",
+                "Ville": "Paris",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "landry@longuevie.co",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Type": "Physique",
+                "SocieteGestion": "SACEM",
+                "Pseudonyme": "",
+                "Nom": "BARRADA",
+                "Prenom": "Sami",
+                "Genre": "MR",
+                "Nele": "",
+                "Nea": ""
+            },
+            "BDO": {
+                "Role": "C",
+                "Lettrage": "E",
+                "COAD/IPI": "IPI : 1151612003",
+                "PH": "8.34",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "11",
+                "TypeVoie": "Avenue",
+                "NomVoie": "",
+                "CP": "95310",
+                "Ville": "Saint Ouen l’Aumone",
+                "Pays": "FRANCE"
+            },
+            "Contact": {
+                "Mail": "samialaprod@gmail.com",
+                "Tel": ""
+            }
+        },
+        {
+            "Identite": {
+                "Designation": "CUBEATZ MUSIC GMBH",
+                "Type": "Moral",
+                "SocieteGestion": "GEMA",
+                "FormeJuridique": "",
+                "Capital": "",
+                "RCS": "",
+                "Siren": "",
+                "GenreRepresentant": "",
+                "PrenomRepresentant": "",
+                "NomRepresentant": "",
+                "FonctionRepresentant": ""
+            },
+            "BDO": {
+                "Role": "E",
+                "Lettrage": "E",
+                "COAD/IPI": "",
+                "PH": "8.33",
+                "Managelic": "",
+                "Managesub": "",
+                "DE": "",
+                "DR": ""
+            },
+            "Adresse": {
+                "NumVoie": "",
+                "TypeVoie": "",
+                "NomVoie": "",
+                "CP": "",
+                "Ville": "",
+                "Pays": ""
+            },
+            "Contact": {
+                "Mail": "samialaprod@gmail.com",
+                "Tel": ""
+            }
+        }
+    ]
+}
