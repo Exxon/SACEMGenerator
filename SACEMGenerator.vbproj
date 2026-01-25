@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -110,7 +110,7 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
     <Compile Include="Services\BalisesGenerator.vb" />
-    <Compile Include="Services\BDOGenerator.vb" />
+    <Compile Include="Services\BDOPdfGenerator.vb" />
     <Compile Include="Services\ContractGenerator.vb" />
     <Compile Include="Services\ExcelToJsonConverter.vb" />
     <Compile Include="Services\ParagraphTemplateReader.vb" />
@@ -132,12 +132,15 @@
     <Content Include="Scripts\Xlstojson\Xlstojson.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Scripts\Xlstojson\xlsx\_readme.txt">
+    <!-- Script Python pour remplir le BDO PDF -->
+    <Content Include="Scripts\FillBDO\FillBDOFromJson.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Scripts\Xlstojson\json\_readme.txt">
+    <!-- Template BDO PDF officiel SACEM -->
+    <Content Include="templates\Bdo711.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- Dossiers xlsx et json (vides) -->
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
@@ -149,9 +152,6 @@
     </None>
     <None Include="App.config" />
     <None Include="packages.config" />
-    <Content Include="templates\BDO_template.docx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="templates\CCDAA_template.docx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -165,6 +165,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Scripts\Xlstojson\json\" />
+    <Folder Include="Scripts\Xlstojson\xlsx\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
 </Project>

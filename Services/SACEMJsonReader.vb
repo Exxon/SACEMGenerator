@@ -84,6 +84,9 @@ Public Class SACEMJsonReader
             ayant.Identite.Nom = GetStringValue(identiteObj, "Nom")
             ayant.Identite.Prenom = GetStringValue(identiteObj, "Prenom")
             
+            ' Société de gestion collective (SACEM, GEMA, KODA, etc.)
+            ayant.Identite.SocieteGestion = GetStringValue(identiteObj, "SocieteGestion")
+            
             ' Naissance (pour personnes physiques)
             ayant.Identite.Nele = GetStringValue(identiteObj, "Nele")
             ayant.Identite.Nea = GetStringValue(identiteObj, "Nea")
@@ -207,7 +210,11 @@ Public Class SACEMJsonReader
         report.AppendLine("DÉTAIL DES AYANTS DROIT:")
         For i As Integer = 0 To data.AyantsDroit.Count - 1
             Dim ayant As AyantDroit = data.AyantsDroit(i)
-            report.AppendLine($"  [{i + 1}] {ayant.Identite.Designation}")
+            ' Afficher Designation pour moral, Nom Prenom pour physique
+            Dim identifiant As String = If(Not String.IsNullOrEmpty(ayant.Identite.Designation), 
+                                           ayant.Identite.Designation, 
+                                           $"{ayant.Identite.Prenom} {ayant.Identite.Nom}".Trim())
+            report.AppendLine($"  [{i + 1}] {identifiant}")
             report.AppendLine($"      Type: {ayant.Identite.Type}")
             report.AppendLine($"      Rôle: {ayant.BDO.Role}")
             report.AppendLine($"      Part (PH): {ayant.BDO.PH}%")
@@ -244,11 +251,25 @@ Public Class SACEMJsonReader
 
             ' Vérification de la cohérence des ayants droit
             For Each ayant In data.AyantsDroit
-                If String.IsNullOrEmpty(ayant.Identite.Designation) Then
-                    Return (False, "Un ayant droit n'a pas de désignation")
+                ' Pour les personnes physiques : Nom ou Prenom requis
+                ' Pour les personnes morales : Designation requis
+                Dim hasIdentity As Boolean = False
+                If ayant.Identite.Type = "Physique" Then
+                    hasIdentity = Not String.IsNullOrEmpty(ayant.Identite.Nom) OrElse 
+                                  Not String.IsNullOrEmpty(ayant.Identite.Prenom)
+                Else
+                    hasIdentity = Not String.IsNullOrEmpty(ayant.Identite.Designation)
                 End If
+                
+                If Not hasIdentity Then
+                    Return (False, "Un ayant droit n'a pas d'identité (Designation pour moral, Nom/Prenom pour physique)")
+                End If
+                
                 If String.IsNullOrEmpty(ayant.BDO.Role) Then
-                    Return (False, $"L'ayant droit '{ayant.Identite.Designation}' n'a pas de rôle")
+                    Dim identifiant As String = If(Not String.IsNullOrEmpty(ayant.Identite.Designation), 
+                                                   ayant.Identite.Designation, 
+                                                   $"{ayant.Identite.Nom} {ayant.Identite.Prenom}".Trim())
+                    Return (False, $"L'ayant droit '{identifiant}' n'a pas de rôle")
                 End If
             Next
 

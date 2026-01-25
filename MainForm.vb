@@ -47,6 +47,28 @@ Public Class MainForm
         btnGenerateBDO.Enabled = False
         btnGenerateContracts.Enabled = False
         btnGenerateAll.Enabled = False
+        
+        ' Réinitialiser les indicateurs
+        ResetIndicators()
+    End Sub
+
+    ''' <summary>
+    ''' Réinitialise tous les indicateurs à leurs valeurs par défaut
+    ''' </summary>
+    Private Sub ResetIndicators()
+        lblTitre.Text = "Titre: -"
+        lblInterprete.Text = "Interprète: -"
+        lblAyantsDroit.Text = "Ayants droit: 0"
+        lblLettrages.Text = "Lettrages: 0"
+        lblAuteurs.Text = "A: 0"
+        lblCompositeurs.Text = "C: 0"
+        lblEditeurs.Text = "E: 0"
+        
+        ' Indicateurs NON-SACEM
+        lblNonSACEM.Text = "NON-SACEM: 0"
+        lblNonSACEM.ForeColor = Color.Black
+        lblPartsInedites.Text = "Parts inédites: 0"
+        lblPartsInedites.ForeColor = Color.Black
     End Sub
 
     ''' <summary>
@@ -100,6 +122,9 @@ Public Class MainForm
             lblInterprete.Text = $"Interprète: {_currentData.Interprete}"
             lblAyantsDroit.Text = $"Ayants droit: {_currentData.AyantsDroit.Count}"
 
+            ' Calculer et afficher les statistiques détaillées
+            UpdateDetailedStatistics()
+
             ' Charger les templates de paragraphes
             LoadParagraphTemplates()
 
@@ -118,7 +143,203 @@ Public Class MainForm
             btnGenerateBDO.Enabled = False
             btnGenerateContracts.Enabled = False
             btnGenerateAll.Enabled = False
+            
+            ResetIndicators()
         End Try
+    End Sub
+
+    ''' <summary>
+    ''' Calcule et affiche les statistiques détaillées des ayants droit
+    ''' </summary>
+    Private Sub UpdateDetailedStatistics()
+        If _currentData Is Nothing OrElse _currentData.AyantsDroit Is Nothing Then
+            ResetIndicators()
+            Return
+        End If
+        
+        ' Compteurs
+        Dim countA As Integer = 0      ' Auteurs
+        Dim countC As Integer = 0      ' Compositeurs
+        Dim countE As Integer = 0      ' Éditeurs
+        Dim countNonSACEM As Integer = 0
+        Dim countPartsInedites As Integer = 0
+        
+        ' Liste des lettrages uniques
+        Dim lettrages As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        
+        ' Dictionnaire pour compter les ayants droit par lettrage (pour détecter parts inédites)
+        Dim ayantsDroitParLettrage As New Dictionary(Of String, List(Of String))(StringComparer.OrdinalIgnoreCase)
+        
+        ' Parcourir tous les ayants droit
+        For Each ayant In _currentData.AyantsDroit
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
+            
+            ' Compter par rôle
+            Select Case role
+                Case "A", "AD"
+                    countA += 1
+                Case "C", "AR"
+                    countC += 1
+                Case "AC"
+                    countA += 1
+                    countC += 1
+                Case "E"
+                    countE += 1
+            End Select
+            
+            ' Collecter les lettrages
+            If Not String.IsNullOrEmpty(lettrage) Then
+                lettrages.Add(lettrage)
+                
+                ' Grouper par lettrage pour détecter les parts inédites
+                If Not ayantsDroitParLettrage.ContainsKey(lettrage) Then
+                    ayantsDroitParLettrage(lettrage) = New List(Of String)
+                End If
+                ayantsDroitParLettrage(lettrage).Add(role)
+            End If
+            
+            ' Compter NON-SACEM
+            If societe <> "SACEM" AndAlso Not String.IsNullOrEmpty(societe) Then
+                countNonSACEM += 1
+            End If
+        Next
+        
+        ' Détecter les parts inédites (AC seul dans son lettrage = pas d'éditeur)
+        For Each kvp In ayantsDroitParLettrage
+            Dim roles As List(Of String) = kvp.Value
+            Dim hasAC As Boolean = roles.Any(Function(r) r = "A" OrElse r = "C" OrElse r = "AC" OrElse r = "AR" OrElse r = "AD")
+            Dim hasE As Boolean = roles.Any(Function(r) r = "E")
+            
+            ' Si un lettrage a des AC mais pas d'éditeur = part inédite
+            If hasAC AndAlso Not hasE Then
+                ' Compter le nombre d'AC dans ce lettrage
+                countPartsInedites += roles.Where(Function(r) r = "A" OrElse r = "C" OrElse r = "AC" OrElse r = "AR" OrElse r = "AD").Count()
+            End If
+        Next
+        
+        ' Afficher les compteurs
+        lblLettrages.Text = $"Lettrages: {lettrages.Count}"
+        lblAuteurs.Text = $"A: {countA}"
+        lblCompositeurs.Text = $"C: {countC}"
+        lblEditeurs.Text = $"E: {countE}"
+        
+        ' Afficher NON-SACEM avec indicateur visuel
+        lblNonSACEM.Text = $"NON-SACEM: {countNonSACEM}"
+        If countNonSACEM > 0 Then
+            lblNonSACEM.ForeColor = Color.OrangeRed
+            lblNonSACEM.Font = New Font(lblNonSACEM.Font, FontStyle.Bold)
+        Else
+            lblNonSACEM.ForeColor = Color.Green
+            lblNonSACEM.Font = New Font(lblNonSACEM.Font, FontStyle.Regular)
+        End If
+        
+        ' Afficher Parts inédites avec indicateur visuel
+        lblPartsInedites.Text = $"Parts inédites: {countPartsInedites}"
+        If countPartsInedites > 0 Then
+            lblPartsInedites.ForeColor = Color.OrangeRed
+            lblPartsInedites.Font = New Font(lblPartsInedites.Font, FontStyle.Bold)
+        Else
+            lblPartsInedites.ForeColor = Color.Green
+            lblPartsInedites.Font = New Font(lblPartsInedites.Font, FontStyle.Regular)
+        End If
+        
+        ' Log des statistiques
+        txtLog.AppendText($"{vbCrLf}=== STATISTIQUES ==={vbCrLf}")
+        txtLog.AppendText($"  Lettrages: {lettrages.Count} ({String.Join(", ", lettrages.OrderBy(Function(l) l))}){vbCrLf}")
+        txtLog.AppendText($"  Auteurs (A/AD): {countA}{vbCrLf}")
+        txtLog.AppendText($"  Compositeurs (C/AR): {countC}{vbCrLf}")
+        txtLog.AppendText($"  Éditeurs (E): {countE}{vbCrLf}")
+        txtLog.AppendText($"  NON-SACEM: {countNonSACEM}{vbCrLf}")
+        txtLog.AppendText($"  Parts inédites: {countPartsInedites}{vbCrLf}")
+        
+        ' Afficher l'alerte NON-SACEM si nécessaire
+        If countNonSACEM > 0 Then
+            txtLog.AppendText($"  ⚠ ŒUVRE MIXTE détectée (membres NON-SACEM présents){vbCrLf}")
+            
+            ' Afficher la MessageBox d'alerte
+            ShowNonSACEMAlert()
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Affiche une alerte détaillée pour les ayants droit NON-SACEM
+    ''' </summary>
+    Private Sub ShowNonSACEMAlert()
+        If _currentData Is Nothing OrElse _currentData.AyantsDroit Is Nothing Then Return
+        
+        Dim alertMessage As New System.Text.StringBuilder()
+        alertMessage.AppendLine("⚠ ŒUVRE MIXTE DÉTECTÉE")
+        alertMessage.AppendLine()
+        alertMessage.AppendLine("Les ayants droit suivants ne sont pas membres de la SACEM :")
+        alertMessage.AppendLine()
+        
+        ' Collecter les NON-SACEM par type (AC vs E)
+        Dim acNonSACEM As New List(Of String)
+        Dim eNonSACEM As New List(Of String)
+        
+        For Each ayant In _currentData.AyantsDroit
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            
+            ' Si vide ou SACEM, on ignore
+            If String.IsNullOrEmpty(societe) OrElse societe = "SACEM" Then Continue For
+            
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
+            Dim isE As Boolean = (role = "E")
+            
+            ' Nom d'affichage
+            Dim displayName As String
+            If ayant.Identite.Type = "Physique" Then
+                displayName = $"{ayant.Identite.Prenom} {ayant.Identite.Nom}".Trim()
+                If String.IsNullOrEmpty(displayName) Then displayName = ayant.Identite.Designation
+            Else
+                displayName = ayant.Identite.Designation
+            End If
+            
+            Dim info As String = $"• {displayName} ({ayant.Identite.SocieteGestion})"
+            
+            If isAC Then
+                acNonSACEM.Add(info)
+            ElseIf isE Then
+                eNonSACEM.Add(info)
+            End If
+        Next
+        
+        ' Afficher les AC NON-SACEM
+        If acNonSACEM.Count > 0 Then
+            alertMessage.AppendLine("AUTEURS/COMPOSITEURS :")
+            For Each ac In acNonSACEM
+                alertMessage.AppendLine(ac)
+            Next
+            alertMessage.AppendLine()
+            alertMessage.AppendLine("→ Ne signeront PAS : CCEOM, CCDAA")
+            alertMessage.AppendLine("→ Signeront UNIQUEMENT : Split Sheet (Lettre de Répartition)")
+            alertMessage.AppendLine()
+        End If
+        
+        ' Afficher les E NON-SACEM
+        If eNonSACEM.Count > 0 Then
+            alertMessage.AppendLine("ÉDITEURS :")
+            For Each e In eNonSACEM
+                alertMessage.AppendLine(e)
+            Next
+            alertMessage.AppendLine()
+            alertMessage.AppendLine("→ Ne signeront PAS : COED")
+            alertMessage.AppendLine("→ Signeront UNIQUEMENT : Split Sheet (Lettre de Répartition)")
+            alertMessage.AppendLine()
+        End If
+        
+        alertMessage.AppendLine("────────────────────────────────")
+        alertMessage.AppendLine("Les mentions NON-SACEM seront ajoutées automatiquement")
+        alertMessage.AppendLine("dans les contrats (Articles 11 et 16 du CCEOM, Article 3 du COED).")
+        
+        ' Afficher la MessageBox
+        MessageBox.Show(alertMessage.ToString(), 
+                       "Alerte : Membres NON-SACEM détectés", 
+                       MessageBoxButtons.OK, 
+                       MessageBoxIcon.Warning)
     End Sub
 
     ''' <summary>
@@ -152,10 +373,10 @@ Public Class MainForm
         Try
             txtLog.AppendText($"{vbCrLf}=== GÉNÉRATION BDO ==={vbCrLf}")
 
-            ' Vérifier le template BDO
-            Dim bdoTemplatePath As String = Path.Combine(_templatesDirectory, "BDO_template.docx")
+            ' Vérifier le template BDO PDF officiel SACEM
+            Dim bdoTemplatePath As String = Path.Combine(_templatesDirectory, "Bdo711.pdf")
             If Not File.Exists(bdoTemplatePath) Then
-                MessageBox.Show($"Template BDO introuvable:{vbCrLf}{bdoTemplatePath}", 
+                MessageBox.Show($"Template PDF BDO introuvable:{vbCrLf}{bdoTemplatePath}", 
                                "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return
             End If
@@ -165,8 +386,8 @@ Public Class MainForm
             outputFileName = CleanFileName(outputFileName)
             Dim outputPath As String = Path.Combine(_outputDirectory, outputFileName)
 
-            ' Générer le BDO
-            Dim generator As New BDOGenerator(_currentData)
+            ' Générer le BDO avec le nouveau générateur PDF
+            Dim generator As New BDOPdfGenerator(_currentData)
             Dim success As Boolean = generator.Generate(bdoTemplatePath, outputPath)
 
             ' Afficher les logs
@@ -211,53 +432,39 @@ Public Class MainForm
             Next
 
             If missingTemplates.Count > 0 Then
-                Dim message As String = $"Templates manquants:{vbCrLf}{String.Join(", ", missingTemplates)}"
-                MessageBox.Show(message, "Attention", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                MessageBox.Show($"Templates manquants:{vbCrLf}{String.Join(vbCrLf, missingTemplates)}", 
+                               "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
             End If
 
-            ' Générer chaque type de contrat
-            Dim successCount As Integer = 0
-            Dim generator As New ContractGenerator(_currentData, _paragraphReader)
-
+            ' Générer chaque contrat
             For Each kvp In templates
                 Dim contractType As String = kvp.Key
                 Dim templatePath As String = kvp.Value
-
-                If Not File.Exists(templatePath) Then
-                    txtLog.AppendText($"⊗ {contractType}: Template manquant{vbCrLf}")
-                    Continue For
-                End If
-
-                ' Nom du fichier de sortie
                 Dim outputFileName As String = $"{contractType}_{_currentData.Titre}_{_currentData.Interprete}.docx"
                 outputFileName = CleanFileName(outputFileName)
                 Dim outputPath As String = Path.Combine(_outputDirectory, outputFileName)
 
-                ' Générer le contrat
-                Dim success As Boolean = generator.Generate(templatePath, outputPath, contractType)
+                txtLog.AppendText($"Génération {contractType}...{vbCrLf}")
 
-                ' Afficher les logs
-                For Each logEntry In generator.GenerationLog
-                    txtLog.AppendText($"{logEntry}{vbCrLf}")
+                ' Créer le générateur de contrat avec les données et le reader de paragraphes
+                Dim contractGenerator As New ContractGenerator(_currentData, _paragraphReader)
+                Dim success As Boolean = contractGenerator.Generate(templatePath, outputPath, contractType)
+
+                ' Afficher les logs du générateur
+                For Each logEntry In contractGenerator.GenerationLog
+                    txtLog.AppendText($"  {logEntry}{vbCrLf}")
                 Next
 
                 If success Then
-                    successCount += 1
+                    txtLog.AppendText($"✓ {contractType} généré: {outputFileName}{vbCrLf}")
+                Else
+                    txtLog.AppendText($"✗ Échec génération {contractType}{vbCrLf}")
                 End If
             Next
 
-            ' Message final
-            Dim totalContracts As Integer = templates.Count
-            If successCount = totalContracts Then
-                MessageBox.Show($"Tous les contrats générés avec succès ({successCount}/{totalContracts})", 
-                               "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            ElseIf successCount > 0 Then
-                MessageBox.Show($"Certains contrats générés ({successCount}/{totalContracts}). Consultez les logs.", 
-                               "Succès partiel", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            Else
-                MessageBox.Show("Échec de la génération des contrats. Consultez les logs.", 
-                               "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            End If
+            MessageBox.Show("Génération des contrats terminée. Consultez les logs.", 
+                           "Terminé", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
         Catch ex As Exception
             txtLog.AppendText($"✗ ERREUR: {ex.Message}{vbCrLf}")
@@ -271,12 +478,14 @@ Public Class MainForm
     ''' </summary>
     Private Sub btnGenerateAll_Click(sender As Object, e As EventArgs) Handles btnGenerateAll.Click
         Try
-            txtLog.AppendText($"{vbCrLf}=== GÉNÉRATION COMPLÈTE (BDO + CONTRATS) ==={vbCrLf}")
+            txtLog.AppendText(vbCrLf & New String("="c, 50) & vbCrLf)
+            txtLog.AppendText("=== GÉNÉRATION COMPLÈTE ===" & vbCrLf)
+            txtLog.AppendText(New String("="c, 50) & vbCrLf)
 
-            ' Générer le BDO
+            ' Générer BDO
             btnGenerateBDO_Click(sender, e)
 
-            ' Générer les contrats
+            ' Générer Contrats
             btnGenerateContracts_Click(sender, e)
 
             txtLog.AppendText($"{vbCrLf}=== GÉNÉRATION COMPLÈTE TERMINÉE ==={vbCrLf}")
@@ -294,7 +503,7 @@ Public Class MainForm
     Private Sub btnClearLog_Click(sender As Object, e As EventArgs) Handles btnClearLog.Click
         txtLog.Clear()
         txtLog.AppendText("=== SACEM GENERATOR - VB.NET ===" & vbCrLf)
-        txtLog.AppendText($"Version 1.0 - {DateTime.Now:yyyy-MM-dd}" & vbCrLf)
+        txtLog.AppendText($"Version 1.1 - {DateTime.Now:yyyy-MM-dd}" & vbCrLf)
         txtLog.AppendText(vbCrLf)
     End Sub
 
@@ -328,18 +537,17 @@ Public Class MainForm
 
     ''' <summary>
     ''' Initialisation des composants du formulaire
-    ''' (À compléter selon vos besoins d'interface)
     ''' </summary>
     Private Sub InitializeComponent()
         Me.Text = "SACEM Generator - VB.NET"
-        Me.Size = New Size(900, 700)
+        Me.Size = New Size(900, 750)
         Me.StartPosition = FormStartPosition.CenterScreen
 
         ' GroupBox - Sélection JSON
         Dim grpJson As New GroupBox()
         grpJson.Text = "1. Sélection du fichier JSON"
         grpJson.Location = New Point(10, 10)
-        grpJson.Size = New Size(860, 100)
+        grpJson.Size = New Size(860, 130)
 
         txtJsonPath = New TextBox()
         txtJsonPath.Location = New Point(10, 25)
@@ -353,6 +561,7 @@ Public Class MainForm
         btnSelectJson.Size = New Size(120, 25)
         grpJson.Controls.Add(btnSelectJson)
 
+        ' Ligne 1 : Titre et Interprète
         lblTitre = New Label()
         lblTitre.Location = New Point(10, 55)
         lblTitre.Size = New Size(400, 20)
@@ -360,23 +569,64 @@ Public Class MainForm
         grpJson.Controls.Add(lblTitre)
 
         lblInterprete = New Label()
-        lblInterprete.Location = New Point(10, 75)
+        lblInterprete.Location = New Point(420, 55)
         lblInterprete.Size = New Size(400, 20)
         lblInterprete.Text = "Interprète: -"
         grpJson.Controls.Add(lblInterprete)
 
+        ' Ligne 2 : Ayants droit, Lettrages, A, C, E
         lblAyantsDroit = New Label()
-        lblAyantsDroit.Location = New Point(420, 55)
-        lblAyantsDroit.Size = New Size(200, 20)
+        lblAyantsDroit.Location = New Point(10, 80)
+        lblAyantsDroit.Size = New Size(120, 20)
         lblAyantsDroit.Text = "Ayants droit: 0"
         grpJson.Controls.Add(lblAyantsDroit)
+
+        lblLettrages = New Label()
+        lblLettrages.Location = New Point(140, 80)
+        lblLettrages.Size = New Size(100, 20)
+        lblLettrages.Text = "Lettrages: 0"
+        grpJson.Controls.Add(lblLettrages)
+
+        lblAuteurs = New Label()
+        lblAuteurs.Location = New Point(250, 80)
+        lblAuteurs.Size = New Size(60, 20)
+        lblAuteurs.Text = "A: 0"
+        lblAuteurs.ForeColor = Color.DarkBlue
+        grpJson.Controls.Add(lblAuteurs)
+
+        lblCompositeurs = New Label()
+        lblCompositeurs.Location = New Point(320, 80)
+        lblCompositeurs.Size = New Size(60, 20)
+        lblCompositeurs.Text = "C: 0"
+        lblCompositeurs.ForeColor = Color.DarkBlue
+        grpJson.Controls.Add(lblCompositeurs)
+
+        lblEditeurs = New Label()
+        lblEditeurs.Location = New Point(390, 80)
+        lblEditeurs.Size = New Size(60, 20)
+        lblEditeurs.Text = "E: 0"
+        lblEditeurs.ForeColor = Color.DarkBlue
+        grpJson.Controls.Add(lblEditeurs)
+
+        ' Ligne 3 : NON-SACEM et Parts inédites (avec indicateurs visuels)
+        lblNonSACEM = New Label()
+        lblNonSACEM.Location = New Point(10, 105)
+        lblNonSACEM.Size = New Size(150, 20)
+        lblNonSACEM.Text = "NON-SACEM: 0"
+        grpJson.Controls.Add(lblNonSACEM)
+
+        lblPartsInedites = New Label()
+        lblPartsInedites.Location = New Point(170, 105)
+        lblPartsInedites.Size = New Size(150, 20)
+        lblPartsInedites.Text = "Parts inédites: 0"
+        grpJson.Controls.Add(lblPartsInedites)
 
         Me.Controls.Add(grpJson)
 
         ' GroupBox - Configuration
         Dim grpConfig As New GroupBox()
         grpConfig.Text = "2. Configuration des chemins"
-        grpConfig.Location = New Point(10, 120)
+        grpConfig.Location = New Point(10, 150)
         grpConfig.Size = New Size(860, 100)
 
         Dim lblTemplates As New Label()
@@ -420,7 +670,7 @@ Public Class MainForm
         ' GroupBox - Génération
         Dim grpGeneration As New GroupBox()
         grpGeneration.Text = "3. Génération des documents"
-        grpGeneration.Location = New Point(10, 230)
+        grpGeneration.Location = New Point(10, 260)
         grpGeneration.Size = New Size(860, 80)
 
         btnGenerateBDO = New Button()
@@ -453,21 +703,21 @@ Public Class MainForm
         ' GroupBox - Logs
         Dim grpLogs As New GroupBox()
         grpLogs.Text = "4. Logs de génération"
-        grpLogs.Location = New Point(10, 320)
-        grpLogs.Size = New Size(860, 320)
+        grpLogs.Location = New Point(10, 350)
+        grpLogs.Size = New Size(860, 350)
 
         txtLog = New TextBox()
         txtLog.Multiline = True
         txtLog.ScrollBars = ScrollBars.Vertical
         txtLog.Location = New Point(10, 25)
-        txtLog.Size = New Size(830, 250)
+        txtLog.Size = New Size(830, 280)
         txtLog.Font = New Font("Consolas", 9)
         txtLog.ReadOnly = True
         grpLogs.Controls.Add(txtLog)
 
         btnClearLog = New Button()
         btnClearLog.Text = "Effacer les logs"
-        btnClearLog.Location = New Point(10, 280)
+        btnClearLog.Location = New Point(10, 310)
         btnClearLog.Size = New Size(150, 30)
         grpLogs.Controls.Add(btnClearLog)
 
@@ -483,6 +733,12 @@ Public Class MainForm
     Private WithEvents lblTitre As Label
     Private WithEvents lblInterprete As Label
     Private WithEvents lblAyantsDroit As Label
+    Private WithEvents lblLettrages As Label
+    Private WithEvents lblAuteurs As Label
+    Private WithEvents lblCompositeurs As Label
+    Private WithEvents lblEditeurs As Label
+    Private WithEvents lblNonSACEM As Label
+    Private WithEvents lblPartsInedites As Label
     Private WithEvents txtTemplatesPath As TextBox
     Private WithEvents txtOutputPath As TextBox
     Private WithEvents txtParagraphTemplate As TextBox

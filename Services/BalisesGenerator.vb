@@ -38,6 +38,9 @@ Public Class BalisesGenerator
         ' 6. Balises de territoire et arrangement
         GenerateConditionalBalises()
 
+        ' 7. Balises NON-SACEM (œuvres mixtes)
+        GenerateNonSACEMBalises()
+
         Return _balises
     End Function
 
@@ -99,7 +102,9 @@ Public Class BalisesGenerator
             Dim index As Integer = i + 1
 
             SetBalise($"Role{index}", ayant.BDO.Role)
-            SetBalise($"Designation{index}", ayant.Identite.Designation)
+            ' Pour Designation : utiliser Nom Prenom pour les personnes physiques
+            Dim designation As String = GetDisplayIdentifiant(ayant)
+            SetBalise($"Designation{index}", designation)
             SetBalise($"Lettrage{index}", ayant.BDO.Lettrage)
             SetBalise($"COAD/IPI{index}", ayant.BDO.COAD_IPI)
             SetBalise($"PH{index}", ayant.BDO.PH)
@@ -135,10 +140,10 @@ Public Class BalisesGenerator
                     compositeurs.Add(displayName)
                 End If
                 
-                ' Pour pseudolist, garder la même logique
+                ' Pour pseudolist : Pseudonyme si rempli, sinon identifiant d'affichage
                 Dim pseudo As String = If(Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme), 
                                           ayant.Identite.Pseudonyme, 
-                                          ayant.Identite.Designation)
+                                          GetDisplayIdentifiant(ayant))
                 If Not compositeursPseudo.Contains(pseudo) Then
                     compositeursPseudo.Add(pseudo)
                 End If
@@ -169,10 +174,10 @@ Public Class BalisesGenerator
                     auteurs.Add(displayName)
                 End If
                 
-                ' Pour pseudolist, garder la même logique
+                ' Pour pseudolist : Pseudonyme si rempli, sinon identifiant d'affichage
                 Dim pseudo As String = If(Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme), 
                                           ayant.Identite.Pseudonyme, 
-                                          ayant.Identite.Designation)
+                                          GetDisplayIdentifiant(ayant))
                 If Not auteursPseudo.Contains(pseudo) Then
                     auteursPseudo.Add(pseudo)
                 End If
@@ -341,6 +346,180 @@ Public Class BalisesGenerator
     End Sub
 
     ''' <summary>
+    ''' Génère les balises pour les œuvres mixtes (SACEM + NON-SACEM)
+    ''' 20 balises : calcul, listes, pluriel/singulier, spécifiques
+    ''' </summary>
+    Private Sub GenerateNonSACEMBalises()
+        ' =====================================================
+        ' 1. COLLECTER LES AYANTS DROIT PAR CATÉGORIE
+        ' =====================================================
+        
+        ' Listes SACEM
+        Dim acSACEM As New List(Of String)        ' AC membres SACEM
+        Dim eSACEM As New List(Of String)         ' E membres SACEM
+        
+        ' Listes NON-SACEM
+        Dim acNonSACEM As New List(Of String)     ' AC NON-SACEM avec (SOCIÉTÉ)
+        Dim eNonSACEM As New List(Of String)      ' E NON-SACEM avec (SOCIÉTÉ)
+        Dim acNonSACEM_Noms As New List(Of String) ' AC NON-SACEM noms seuls
+        Dim eNonSACEM_Noms As New List(Of String)  ' E NON-SACEM noms seuls
+        
+        ' Parts pour calcul
+        Dim partsSACEM As Double = 0
+        Dim partsNonSACEM As Double = 0
+        
+        ' Compteur NON-SACEM pour pluriel
+        Dim countNonSACEM As Integer = 0
+        
+        ' Détection éditeur étranger qui édite un AC SACEM
+        Dim editeurDeInfo As String = ""
+        
+        ' Parcourir tous les ayants droit
+        For Each ayant In _data.AyantsDroit
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
+            Dim isSACEM As Boolean = (societe = "SACEM" OrElse String.IsNullOrEmpty(societe))
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
+            Dim isE As Boolean = (role = "E")
+            
+            ' Récupérer le pourcentage
+            Dim ph As Double = 0
+            Double.TryParse(If(ayant.BDO.PH, "0"), NumberStyles.Any, CultureInfo.InvariantCulture, ph)
+            
+            ' Nom d'affichage
+            Dim displayName As String = GetDisplayIdentifiant(ayant)
+            Dim societeAffichage As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            
+            If isSACEM Then
+                ' MEMBRE SACEM
+                partsSACEM += ph
+                
+                If isAC AndAlso Not acSACEM.Contains(displayName) Then
+                    acSACEM.Add(displayName)
+                ElseIf isE AndAlso Not eSACEM.Contains(displayName) Then
+                    eSACEM.Add(displayName)
+                End If
+            Else
+                ' MEMBRE NON-SACEM
+                partsNonSACEM += ph
+                countNonSACEM += 1
+                
+                Dim nomAvecSociete As String = $"{displayName} ({societeAffichage})"
+                
+                If isAC Then
+                    If Not acNonSACEM.Contains(nomAvecSociete) Then
+                        acNonSACEM.Add(nomAvecSociete)
+                    End If
+                    If Not acNonSACEM_Noms.Contains(displayName) Then
+                        acNonSACEM_Noms.Add(displayName)
+                    End If
+                ElseIf isE Then
+                    If Not eNonSACEM.Contains(nomAvecSociete) Then
+                        eNonSACEM.Add(nomAvecSociete)
+                    End If
+                    If Not eNonSACEM_Noms.Contains(displayName) Then
+                        eNonSACEM_Noms.Add(displayName)
+                    End If
+                    
+                    ' Détecter si cet éditeur étranger édite un AC SACEM (via Lettrage)
+                    Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
+                    If Not String.IsNullOrEmpty(lettrage) Then
+                        ' Chercher l'AC SACEM avec le même lettrage
+                        For Each autreAyant In _data.AyantsDroit
+                            Dim autreSociete As String = If(autreAyant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
+                            Dim autreIsSACEM As Boolean = (autreSociete = "SACEM" OrElse String.IsNullOrEmpty(autreSociete))
+                            Dim autreRole As String = If(autreAyant.BDO.Role, "").Trim().ToUpper()
+                            Dim autreIsAC As Boolean = (autreRole = "A" OrElse autreRole = "C" OrElse autreRole = "AC" OrElse autreRole = "AR" OrElse autreRole = "AD")
+                            Dim autreLettrage As String = If(autreAyant.BDO.Lettrage, "").Trim().ToUpper()
+                            
+                            If autreIsSACEM AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
+                                editeurDeInfo = $" éditeur de {GetDisplayIdentifiant(autreAyant)}"
+                                Exit For
+                            End If
+                        Next
+                    End If
+                End If
+            End If
+        Next
+        
+        ' =====================================================
+        ' 2. BALISES DE CALCUL (4)
+        ' =====================================================
+        
+        ' Arrondir à 2 décimales
+        partsSACEM = Math.Round(partsSACEM, 2)
+        partsNonSACEM = Math.Round(partsNonSACEM, 2)
+        
+        SetBalise("PartsSACEM", partsSACEM.ToString("F2", CultureInfo.GetCultureInfo("fr-FR")).Replace(".", ","))
+        SetBalise("PartsNonSACEM", partsNonSACEM.ToString("F2", CultureInfo.GetCultureInfo("fr-FR")).Replace(".", ","))
+        SetBalise("PartsSACEM_Texte", NombreEnLettres(partsSACEM))
+        SetBalise("PartsNonSACEM_Texte", NombreEnLettres(partsNonSACEM))
+        
+        ' =====================================================
+        ' 3. BALISES DE LISTES SACEM (2)
+        ' =====================================================
+        
+        SetBalise("ListeAC_SACEM", FormatList(acSACEM))
+        SetBalise("ListeE_SACEM", FormatList(eSACEM))
+        
+        ' Liste combinée SACEM (AC puis E)
+        Dim listeSACEM As New List(Of String)
+        listeSACEM.AddRange(acSACEM)
+        listeSACEM.AddRange(eSACEM)
+        SetBalise("ListeSACEM", FormatList(listeSACEM))
+        SetBalise("ListeSACEM_Noms", FormatList(listeSACEM)) ' Même chose car SACEM n'a pas de suffixe société
+        
+        ' =====================================================
+        ' 4. BALISES DE LISTES NON-SACEM (4)
+        ' =====================================================
+        
+        SetBalise("ListeAC_NonSACEM", FormatList(acNonSACEM))
+        SetBalise("ListeE_NonSACEM", FormatList(eNonSACEM))
+        
+        ' Liste combinée NON-SACEM (AC puis E)
+        Dim listeNonSACEM As New List(Of String)
+        listeNonSACEM.AddRange(acNonSACEM)
+        listeNonSACEM.AddRange(eNonSACEM)
+        SetBalise("ListeNonSACEM", FormatList(listeNonSACEM))
+        
+        ' Noms seuls
+        Dim listeNonSACEM_Noms As New List(Of String)
+        listeNonSACEM_Noms.AddRange(acNonSACEM_Noms)
+        listeNonSACEM_Noms.AddRange(eNonSACEM_Noms)
+        SetBalise("ListeNonSACEM_Noms", FormatList(listeNonSACEM_Noms))
+        
+        ' =====================================================
+        ' 5. BALISES PLURIEL/SINGULIER (4)
+        ' =====================================================
+        
+        Dim isPluriel As Boolean = (countNonSACEM > 1)
+        
+        SetBalise("EstSont", If(isPluriel, "sont", "est"))
+        SetBalise("IlIls", If(isPluriel, "Ils", "Il"))
+        SetBalise("NestPasNeSontPas", If(isPluriel, "ne sont pas", "n'est pas"))
+        SetBalise("Pluriel", If(isPluriel, "s", ""))
+        
+        ' =====================================================
+        ' 6. BALISES SPÉCIFIQUES (2)
+        ' =====================================================
+        
+        ' NumPoint : calculé dynamiquement (à ajuster selon le contexte)
+        ' Par défaut on met 9, sera ajusté par le générateur de contrat si nécessaire
+        SetBalise("NumPoint", "9")
+        
+        ' EditeurDe : " éditeur de NOM" si éditeur étranger édite AC SACEM
+        SetBalise("EditeurDe", editeurDeInfo)
+        
+        ' =====================================================
+        ' 7. BALISE DE DÉTECTION (pour logique conditionnelle)
+        ' =====================================================
+        
+        Dim hasNonSACEM As Boolean = (countNonSACEM > 0)
+        SetBalise("HasNonSACEM", If(hasNonSACEM, "True", "False"))
+        
+    End Sub
+
+    ''' <summary>
     ''' Génère les balises conditionnelles (X pour les checkboxes)
     ''' </summary>
     Private Sub GenerateConditionalBalises()
@@ -479,6 +658,46 @@ Public Class BalisesGenerator
         Else
             Return nombre.ToString()
         End If
+    End Function
+
+    ''' <summary>
+    ''' Retourne l'identifiant d'affichage pour un ayant droit
+    ''' Personnes physiques : Prenom NOM ou Prenom NOM dit PSEUDO
+    ''' Personnes morales : Designation
+    ''' </summary>
+    Private Function GetDisplayIdentifiant(ayant As AyantDroit) As String
+        ' Pour les personnes morales, utiliser Designation
+        If ayant.Identite.Type = "Moral" Then
+            Return If(ayant.Identite.Designation, "")
+        End If
+        
+        ' Pour les personnes physiques : Prenom NOM [dit PSEUDO]
+        Dim prenom As String = TitleCase(If(ayant.Identite.Prenom, ""))
+        Dim nom As String = If(ayant.Identite.Nom, "").Trim().ToUpper()
+        
+        Dim result As String = ""
+        If Not String.IsNullOrEmpty(prenom) AndAlso Not String.IsNullOrEmpty(nom) Then
+            result = $"{prenom} {nom}"
+        ElseIf Not String.IsNullOrEmpty(nom) Then
+            result = nom
+        ElseIf Not String.IsNullOrEmpty(prenom) Then
+            result = prenom
+        End If
+        
+        ' Ajouter "dit PSEUDO" si pseudonyme renseigné
+        If Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme) Then
+            result = $"{result} dit {ayant.Identite.Pseudonyme}".Trim()
+        End If
+        
+        Return result
+    End Function
+    
+    ''' <summary>
+    ''' Met en majuscule la première lettre de chaque mot
+    ''' </summary>
+    Private Function TitleCase(s As String) As String
+        If String.IsNullOrEmpty(s) Then Return ""
+        Return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s.ToLower())
     End Function
 
     ''' <summary>

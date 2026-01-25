@@ -125,6 +125,9 @@ Public Class Identite
     Public Property Nele As String ' Date de naissance
     Public Property Nea As String ' Lieu de naissance
     
+    ' Société de gestion collective
+    Public Property SocieteGestion As String ' "SACEM", etc.
+    
     ' Pour les personnes morales
     Public Property FormeJuridique As String ' "SAS", "EURL", "SASU", "EI", "ASS"
     Public Property Capital As String

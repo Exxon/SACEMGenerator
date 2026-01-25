@@ -719,12 +719,19 @@ Public Class SuperbaliseGenerator
         Dim combined As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
 
         For Each ayant In _data.AyantsDroit
-            ' Créer une clé normalisée
-            Dim key As String = NormalizeDesignation(ayant.Identite.Designation)
+            ' Créer une clé normalisée basée sur Designation OU Nom+Prenom
+            Dim key As String
+            If Not String.IsNullOrEmpty(ayant.Identite.Designation) Then
+                key = NormalizeDesignation(ayant.Identite.Designation)
+            Else
+                ' Pour les personnes physiques, utiliser Nom + Prenom
+                key = NormalizeDesignation($"{ayant.Identite.Nom} {ayant.Identite.Prenom}")
+            End If
+            
             Dim role As String = ayant.BDO.Role
 
             If combined.ContainsKey(key) Then
-                ' Combiner A+C en AC
+                ' Combiner A+C en AC (seulement si c'est la même personne)
                 If (role = "A" OrElse role = "C") AndAlso
                    (combined(key).BDO.Role = "A" OrElse combined(key).BDO.Role = "C") Then
                     combined(key).BDO.Role = "AC"
