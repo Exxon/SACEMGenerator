@@ -108,6 +108,7 @@ Public Class SuperbaliseGenerator
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
                 If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
+                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
                 
                 Dim key As String = NormalizeDesignation(ayant.Identite.Designation)
                 If Not editeursUniques.ContainsKey(key) Then
@@ -166,6 +167,7 @@ Public Class SuperbaliseGenerator
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
                 If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
+                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
                 
                 Dim key As String = NormalizeDesignation(ayant.Identite.Designation)
                 If Not editeursUniques.ContainsKey(key) Then
@@ -241,6 +243,7 @@ Public Class SuperbaliseGenerator
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
                 If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
+                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
                 
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
@@ -561,6 +564,7 @@ Public Class SuperbaliseGenerator
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
                 If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
+                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
                 
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
@@ -751,6 +755,7 @@ Public Class SuperbaliseGenerator
         For Each ayant In _data.AyantsDroit
             If Not roleFilter.Contains(ayant.BDO.Role) Then Continue For
             If Not IsSACEMMember(ayant) Then Continue For
+            If Not IsSignataire(ayant) Then Continue For
             Dim ph As Double
             If Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
                                Globalization.NumberStyles.Any,
@@ -778,6 +783,8 @@ Public Class SuperbaliseGenerator
         For Each ayant In _data.AyantsDroit
             ' Exclure les NON-SACEM
             If Not IsSACEMMember(ayant) Then Continue For
+            ' Exclure les non-signataires
+            If Not IsSignataire(ayant) Then Continue For
             
             ' Créer une clé normalisée basée sur Designation OU Nom+Prenom
             Dim key As String
@@ -829,6 +836,13 @@ Public Class SuperbaliseGenerator
     Private Function IsSACEMMember(ayant As AyantDroit) As Boolean
         Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
         Return String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+    End Function
+
+    ''' <summary>
+    ''' Vérifie si un ayant droit est signataire du dépôt (TRUE par défaut si absent du JSON)
+    ''' </summary>
+    Private Function IsSignataire(ayant As AyantDroit) As Boolean
+        Return ayant.BDO.Signataire
     End Function
 
     ''' <summary>
@@ -888,6 +902,7 @@ Public Class SuperbaliseGenerator
         dest.BDO.Lettrage = source.BDO.Lettrage
         dest.BDO.Managelic = source.BDO.Managelic
         dest.BDO.Managesub = source.BDO.Managesub
+        dest.BDO.Signataire = source.BDO.Signataire
 
         dest.Adresse.NumVoie = source.Adresse.NumVoie
         dest.Adresse.TypeVoie = source.Adresse.TypeVoie
@@ -1157,4 +1172,54 @@ Public Class SuperbaliseGenerator
             Return If(ayant.Identite.Designation, "")
         End If
     End Function
+
+    ' =====================================================
+    ' GENERATION DU BLOC DEPOT PARTIEL
+    ' =====================================================
+
+    Private Function HasPartiel() As Boolean
+        Return _data.AyantsDroit.Any(Function(a) Not a.BDO.Signataire)
+    End Function
+
+    Public Function GenerateMentionPartiel() As String
+        Try
+            If Not HasPartiel() Then Return ""
+
+            Dim template As String = _paragraphReader.GetTemplate("MENTION_PARTIEL")
+            If String.IsNullOrEmpty(template) Then Return ""
+
+            Dim totalPart As Double = 0.0
+            Dim noms As New List(Of String)
+
+            For Each ayant In _data.AyantsDroit
+                If Not ayant.BDO.Signataire Then Continue For
+
+                Dim ph As Double = 0
+                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, ph)
+                totalPart += ph
+
+                Dim nm As String = GetDisplayName(ayant)
+                If Not String.IsNullOrEmpty(nm) AndAlso Not noms.Contains(nm) Then
+                    noms.Add(nm)
+                End If
+            Next
+
+            Dim pctStr As String = Math.Round(totalPart, 2).ToString("F2",
+                Globalization.CultureInfo.GetCultureInfo("fr-FR")).Replace(".", ",")
+            Dim nomsStr As String = If(noms.Any(), FormatListeEt(noms), "les signataires")
+
+            Dim result As String = template
+            result = result.Replace("[PartsSignataires]", pctStr)
+            result = result.Replace("[ListeSignataires]", nomsStr)
+
+            Return result
+
+        Catch ex As Exception
+            Debug.WriteLine($"Erreur GenerateMentionPartiel: {ex.Message}")
+            Return ""
+        End Try
+    End Function
+
 End Class

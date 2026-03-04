@@ -60,6 +60,7 @@ Public Class TableGenerator
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role = "E" Then Continue For
             If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
+            If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
             
             Dim key As String = GetAyantKey(ayant)
             Dim ph As Double
@@ -169,6 +170,7 @@ Public Class TableGenerator
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role = "E" Then Continue For
             If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
+            If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
             
             Dim key As String = GetAyantKey(ayant)
             Dim ph As Double
@@ -251,6 +253,7 @@ Public Class TableGenerator
                 Dim role As String = ayant.BDO.Role
                 If role = "E" Then Continue For ' Ignorer les éditeurs pour cette partie
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
+            If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
                 
                 ' Clé : Prénom NOM
                 Dim prenom As String = If(ayant.Identite.Prenom, "").Trim()
@@ -309,6 +312,7 @@ Public Class TableGenerator
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role <> "E" Then Continue For
             If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
+            If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
             
             Dim displayName As String = If(ayant.Identite.Designation, "").Trim()
             Dim key As String = NormalizeKey(displayName)
@@ -727,6 +731,7 @@ Public Class TableGenerator
         clone.Identite.Genre = source.Identite.Genre
         clone.BDO.Role = source.BDO.Role
         clone.BDO.PH = source.BDO.PH
+        clone.BDO.Signataire = source.BDO.Signataire
         Return clone
     End Function
 
@@ -1070,5 +1075,12 @@ Public Class TableGenerator
     Private Function IsSACEM(ayant As AyantDroit) As Boolean
         Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
         Return String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+    End Function
+
+    ''' <summary>
+    ''' Vérifie si un ayant droit est signataire du dépôt (TRUE par défaut si absent du JSON)
+    ''' </summary>
+    Private Function IsSignataire(ayant As AyantDroit) As Boolean
+        Return ayant.BDO.Signataire
     End Function
 End Class

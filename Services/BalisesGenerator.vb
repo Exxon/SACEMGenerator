@@ -156,6 +156,7 @@ Public Class BalisesGenerator
         Dim auteurs As New List(Of String)
         Dim auteursPseudo As New List(Of String)
         For Each ayant In _data.AyantsDroit
+            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "A" OrElse ayant.BDO.Role = "AD" Then
                 ' Pseudonyme si rempli, sinon Prénom Nom
                 Dim displayName As String
@@ -169,14 +170,14 @@ Public Class BalisesGenerator
                         displayName = ayant.Identite.Designation
                     End If
                 End If
-                
+
                 If Not auteurs.Contains(displayName) Then
                     auteurs.Add(displayName)
                 End If
-                
+
                 ' Pour pseudolist : Pseudonyme si rempli, sinon identifiant d'affichage
-                Dim pseudo As String = If(Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme), 
-                                          ayant.Identite.Pseudonyme, 
+                Dim pseudo As String = If(Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme),
+                                          ayant.Identite.Pseudonyme,
                                           GetDisplayIdentifiant(ayant))
                 If Not auteursPseudo.Contains(pseudo) Then
                     auteursPseudo.Add(pseudo)
@@ -189,6 +190,7 @@ Public Class BalisesGenerator
         ' Liste des éditeurs (SACEM uniquement - NON-SACEM exclus)
         Dim editeurs As New List(Of String)
         For Each ayant In _data.AyantsDroit
+            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
                 If Not editeurs.Contains(ayant.Identite.Designation) Then
@@ -204,6 +206,7 @@ Public Class BalisesGenerator
         ' Éditeurs sans format (SACEM uniquement)
         Dim editeursSansFormat As New List(Of String)
         For Each ayant In _data.AyantsDroit
+            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" AndAlso ayant.Identite.Designation <> _data.Format Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
                 If Not editeursSansFormat.Contains(ayant.Identite.Designation) Then
@@ -218,9 +221,10 @@ Public Class BalisesGenerator
         ' Format: EDITEUR (pour son propre compte) ou EDITEUR (pour son propre compte et pour le compte de X, et pour le compte de Y)
         SetBalise("sublist", GenerateSubList())
 
-        ' Crédits (TOUS les éditeurs, SACEM + NON-SACEM)
+        ' Crédits (signataires uniquement)
         Dim editeursCredits As New List(Of String)
         For Each ayant In _data.AyantsDroit
+            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
                 If Not editeursCredits.Contains(ayant.Identite.Designation) Then
                     editeursCredits.Add(ayant.Identite.Designation)
@@ -729,6 +733,13 @@ Public Class BalisesGenerator
     Private Function IsSACEM(ayant As AyantDroit) As Boolean
         Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
         Return String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+    End Function
+
+    ''' <summary>
+    ''' Vérifie si un ayant droit est signataire du dépôt (TRUE par défaut si absent du JSON)
+    ''' </summary>
+    Private Function IsSignataire(ayant As AyantDroit) As Boolean
+        Return ayant.BDO.Signataire
     End Function
 
     ''' <summary>

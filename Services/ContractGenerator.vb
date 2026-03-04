@@ -673,6 +673,18 @@ Public Class ContractGenerator
                 _log.Add("    → Bloc BDO_NONSACEM généré")
             End If
 
+            ' =====================================================
+            ' BLOC DÉPÔT PARTIEL
+            ' =====================================================
+
+            ' {MENTION_PARTIEL} - Phrase dépôt partiel
+            _log.Add("  - Génération {MENTION_PARTIEL}...")
+            Dim mentionPartiel As String = superGen.GenerateMentionPartiel()
+            superbalises("MENTION_PARTIEL") = If(mentionPartiel, "")
+            If Not String.IsNullOrEmpty(mentionPartiel) Then
+                _log.Add("    → Bloc MENTION_PARTIEL généré")
+            End If
+
         Catch ex As Exception
             _log.Add($"Erreur génération superbalises: {ex.Message}")
         End Try

@@ -132,6 +132,9 @@ Public Class SACEMJsonReader
             ayant.BDO.Lettrage = GetStringValue(bdoObj, "Lettrage")
             ayant.BDO.Managelic = GetStringValue(bdoObj, "Managelic")
             ayant.BDO.Managesub = GetStringValue(bdoObj, "Managesub")
+            ' Signataire : TRUE par défaut si absent du JSON
+            Dim signataire As String = GetStringValue(bdoObj, "Signataire").Trim().ToUpper()
+            ayant.BDO.Signataire = (signataire <> "FALSE")
         End If
 
         ' Adresse

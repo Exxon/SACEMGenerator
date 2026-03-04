@@ -149,6 +149,7 @@ Public Class BDO
     Public Property Lettrage As String
     Public Property Managelic As String
     Public Property Managesub As String
+    Public Property Signataire As Boolean = True  ' TRUE par défaut si absent du JSON
 End Class
 
 ''' <summary>

@@ -303,9 +303,22 @@ Public Class BDOPdfGenerator
     End Function
 
     ''' <summary>
-    ''' Construit le commentaire BDO avec calcul parts SACEM vs non-SACEM
+    ''' Construit le commentaire BDO.
+    ''' Gère 3 cas :
+    '''   1. Dépôt partiel (certains Signataire=FALSE) → "Le présent dépôt porte sur X% (part de ...)"
+    '''   2. Dépôt complet avec non-SACEM → "Le présent dépôt porte sur X%... Les autres Y% reviennent à..."
+    '''   3. Dépôt complet 100% SACEM → chaîne vide
     ''' </summary>
     Private Function BuildBdoComment() As String
+
+        ' ── Détecter dépôt partiel ──────────────────────────────────────────
+        Dim estPartiel As Boolean = _data.AyantsDroit.Any(Function(a) Not a.BDO.Signataire)
+
+        If estPartiel Then
+            Return BuildCommentairePartiel()
+        End If
+
+        ' ── Dépôt complet : logique non-SACEM existante ─────────────────────
         Dim personsSacem As New List(Of String)
         Dim editorsSacem As New HashSet(Of String)
         Dim nonSacemEditors As New List(Of Tuple(Of String, String)) ' (publisher, lettrage)
@@ -328,12 +341,10 @@ Public Class BDOPdfGenerator
                         letterToPersons(lettrage) = New List(Of String)
                     End If
                     letterToPersons(lettrage).Add(nm)
-
                     If estSacem Then
                         personsSacem.Add(nm)
                     Else
-                        Dim phVal As Double = ParseDouble(bdo.PH)
-                        totalNonSacem += phVal
+                        totalNonSacem += ParseDouble(bdo.PH)
                     End If
                 End If
             ElseIf role = "E" Then
@@ -341,9 +352,7 @@ Public Class BDOPdfGenerator
                 If estSacem AndAlso Not String.IsNullOrEmpty(pub) Then
                     editorsSacem.Add(pub)
                 ElseIf Not estSacem Then
-                    ' Pour les éditeurs non-SACEM, utiliser PH comme pourcentage de contrôle
-                    Dim ctrlPct As Double = ParseDouble(bdo.PH)
-                    totalNonSacem += ctrlPct
+                    totalNonSacem += ParseDouble(bdo.PH)
                     If Not String.IsNullOrEmpty(pub) Then
                         nonSacemEditors.Add(Tuple.Create(pub, lettrage))
                     End If
@@ -351,28 +360,19 @@ Public Class BDOPdfGenerator
             End If
         Next
 
-        ' Dédoublonner
         personsSacem = personsSacem.Distinct().OrderBy(Function(x) x.ToLower()).ToList()
         Dim editorsList As List(Of String) = editorsSacem.OrderBy(Function(x) x.ToLower()).ToList()
-
         Dim partSacem As Double = Math.Max(0.0, 100.0 - totalNonSacem)
         Dim auteursStr As String = If(personsSacem.Any(), JoinListFr(personsSacem), "les ayants droits SACEM")
         Dim editeursStr As String = If(editorsList.Any(), JoinListFr(editorsList), "les éditeurs SACEM")
 
         If totalNonSacem > 0 Then
-            ' Construire la phrase pour les non-SACEM
             Dim agg As New Dictionary(Of String, HashSet(Of String))
             For Each item In nonSacemEditors
-                Dim pub As String = item.Item1
-                Dim lett As String = item.Item2
-                If String.IsNullOrEmpty(pub) Then pub = "un éditeur non-SACEM"
-
-                If Not agg.ContainsKey(pub) Then
-                    agg(pub) = New HashSet(Of String)
-                End If
-
-                If Not String.IsNullOrEmpty(lett) AndAlso letterToPersons.ContainsKey(lett) Then
-                    For Each p In letterToPersons(lett)
+                Dim pub As String = If(String.IsNullOrEmpty(item.Item1), "un éditeur non-SACEM", item.Item1)
+                If Not agg.ContainsKey(pub) Then agg(pub) = New HashSet(Of String)
+                If Not String.IsNullOrEmpty(item.Item2) AndAlso letterToPersons.ContainsKey(item.Item2) Then
+                    For Each p In letterToPersons(item.Item2)
                         agg(pub).Add(p)
                     Next
                 End If
@@ -381,23 +381,51 @@ Public Class BDOPdfGenerator
             Dim segs As New List(Of String)
             For Each pub In agg.Keys.OrderBy(Function(x) x.ToLower())
                 Dim persons = agg(pub).OrderBy(Function(x) x.ToLower()).ToList()
-                If persons.Any() Then
-                    segs.Add($"{pub} éditeur de {JoinListFr(persons)}")
-                Else
-                    segs.Add(pub)
-                End If
+                segs.Add(If(persons.Any(), $"{pub} éditeur de {JoinListFr(persons)}", pub))
             Next
 
             Dim nonSacemPhrase As String = If(segs.Any(), JoinListFr(segs), "des ayants droits non membres de la SACEM")
-
             Return $"Le présent dépôt porte sur {FormatPct(partSacem)} de l'oeuvre " &
                    $"(parts de {auteursStr} et leurs éditeurs {editeursStr}). " &
                    $"Les autres {FormatPct(totalNonSacem)} reviennent à {nonSacemPhrase}, " &
                    "membres d'une société de gestion collective étrangère."
         End If
 
-        ' Tous SACEM : pas de commentaire nécessaire
+        ' Tous SACEM 100% : pas de commentaire
         Return ""
+    End Function
+
+    ''' <summary>
+    ''' Construit le commentaire pour un dépôt partiel.
+    ''' Calcule le % total des signataires et liste leurs noms (créateurs + éditeurs).
+    ''' </summary>
+    Private Function BuildCommentairePartiel() As String
+        Dim totalPart As Double = 0.0
+        Dim noms As New List(Of String)
+
+        For Each ayant In _data.AyantsDroit
+            If Not ayant.BDO.Signataire Then Continue For
+
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            Dim ph As Double = ParseDouble(ayant.BDO.PH)
+            totalPart += ph
+
+            ' Collecter les noms des signataires (créateurs et éditeurs)
+            If role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD" Then
+                Dim nm As String = GetDisplayCivilName(ayant.Identite)
+                If Not String.IsNullOrEmpty(nm) AndAlso Not noms.Contains(nm) Then
+                    noms.Add(nm)
+                End If
+            ElseIf role = "E" Then
+                Dim pub As String = If(ayant.Identite.Designation, "").Trim()
+                If Not String.IsNullOrEmpty(pub) AndAlso Not noms.Contains(pub) Then
+                    noms.Add(pub)
+                End If
+            End If
+        Next
+
+        Dim nomsStr As String = If(noms.Any(), JoinListFr(noms), "les signataires")
+        Return $"Le présent dépôt porte sur {FormatPct(totalPart)} de l'oeuvre (part de {nomsStr})"
     End Function
 
     ''' <summary>
