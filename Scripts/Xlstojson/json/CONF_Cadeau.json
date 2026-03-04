@@ -13,8 +13,8 @@
     "Commentaire": "ISRC:",
     "Faita": "Paris",
     "Faitle": "13/03/2025",
-    "Declaration": "BELLUM PUBLISHING",
-    "Format": "BELLUM PUBLISHING",
+    "Declaration": "SISSOKO Moussa",
+    "Format": "SISSOKO Moussa",
     "AyantsDroit": [
         {
             "Identite": {
@@ -31,7 +31,7 @@
                 "Role": "A",
                 "Lettrage": "A",
                 "COAD/IPI": "IPI: 1128567739",
-                "PH": "12.5",
+                "PH": "25",
                 "Managelic": "",
                 "Managesub": "",
                 "DE": "",
@@ -47,80 +47,6 @@
             },
             "Contact": {
                 "Mail": "moussa.prosissoko@gmail.com",
-                "Tel": ""
-            }
-        },
-        {
-            "Identite": {
-                "Designation": "TH RECORDS",
-                "Type": "Moral",
-                "SocieteGestion": "SACEM",
-                "FormeJuridique": "SAS",
-                "Capital": "1000",
-                "RCS": "Paris",
-                "Siren": "921728556",
-                "GenreRepresentant": "MR",
-                "PrenomRepresentant": "Moussa",
-                "NomRepresentant": "SISSOKO",
-                "FonctionRepresentant": ""
-            },
-            "BDO": {
-                "Role": "E",
-                "Lettrage": "A",
-                "COAD/IPI": "",
-                "PH": "6.25",
-                "Managelic": "",
-                "Managesub": "",
-                "DE": "",
-                "DR": ""
-            },
-            "Adresse": {
-                "NumVoie": "1",
-                "TypeVoie": "impasse",
-                "NomVoie": "Petin",
-                "CP": "75019",
-                "Ville": "Paris",
-                "Pays": "FRANCE"
-            },
-            "Contact": {
-                "Mail": "moussa.prosissoko@gmail.com",
-                "Tel": ""
-            }
-        },
-        {
-            "Identite": {
-                "Designation": "BELLUM PUBLISHING",
-                "Type": "Moral",
-                "SocieteGestion": "SACEM",
-                "FormeJuridique": "EURL",
-                "Capital": "1000",
-                "RCS": "Nanterre",
-                "Siren": "853105048",
-                "GenreRepresentant": "MR",
-                "PrenomRepresentant": "Antoine",
-                "NomRepresentant": "BASSE",
-                "FonctionRepresentant": ""
-            },
-            "BDO": {
-                "Role": "E",
-                "Lettrage": "A",
-                "COAD/IPI": "COAD :1047037384",
-                "PH": "6.25",
-                "Managelic": "",
-                "Managesub": "",
-                "DE": "",
-                "DR": ""
-            },
-            "Adresse": {
-                "NumVoie": "77",
-                "TypeVoie": "allée",
-                "NomVoie": "Georges Askinazi",
-                "CP": "92100",
-                "Ville": "Boulogne Billancourt",
-                "Pays": "FRANCE"
-            },
-            "Contact": {
-                "Mail": "backtobellum@gmail.com",
                 "Tel": ""
             }
         },
@@ -523,7 +449,7 @@
             "Identite": {
                 "Designation": "CUBEATZ MUSIC GMBH",
                 "Type": "Moral",
-                "SocieteGestion": "GEMA",
+                "SocieteGestion": "SACEM",
                 "FormeJuridique": "",
                 "Capital": "",
                 "RCS": "",

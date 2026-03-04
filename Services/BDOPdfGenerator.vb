@@ -180,8 +180,30 @@ Public Class BDOPdfGenerator
 
                 ' Ajouter la société de gestion entre parenthèses pour les NON-SACEM
                 Dim societeGestion As String = If(ident.SocieteGestion, "").Trim().ToUpper()
-                If Not String.IsNullOrEmpty(societeGestion) AndAlso societeGestion <> "SACEM" Then
+                Dim isNonSACEM As Boolean = Not String.IsNullOrEmpty(societeGestion) AndAlso societeGestion <> "SACEM"
+
+                ' Détecter part inédite : A/C sans éditeur sur son lettrage
+                Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+                Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
+                Dim isInedite As Boolean = False
+                If isAC Then
+                    Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
+                    If Not String.IsNullOrEmpty(lettrage) Then
+                        Dim hasEditeur As Boolean = _data.AyantsDroit.Any(Function(e)
+                            Return e.BDO.Role = "E" AndAlso
+                                   If(e.BDO.Lettrage, "").Trim().ToUpper() = lettrage
+                        End Function)
+                        isInedite = Not hasEditeur
+                    End If
+                End If
+
+                ' Construire le suffixe parenthèses
+                If isNonSACEM AndAlso isInedite Then
+                    designation = $"{designation} ({ident.SocieteGestion.Trim()} – part inédite)"
+                ElseIf isNonSACEM Then
                     designation = $"{designation} ({ident.SocieteGestion.Trim()})"
+                ElseIf isInedite Then
+                    designation = $"{designation} (part inédite)"
                 End If
 
                 values(fields("Designation")) = designation
@@ -374,8 +396,8 @@ Public Class BDOPdfGenerator
                    "membres d'une société de gestion collective étrangère."
         End If
 
-        Return $"Le présent dépôt porte sur 100,00% de l'oeuvre " &
-               $"(parts de {auteursStr} et leurs éditeurs {editeursStr})."
+        ' Tous SACEM : pas de commentaire nécessaire
+        Return ""
     End Function
 
     ''' <summary>
