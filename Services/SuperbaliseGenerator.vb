@@ -102,10 +102,12 @@ Public Class SuperbaliseGenerator
             Dim isFirst As Boolean = True
             
             ' Dédupliquer les éditeurs par Designation (clé normalisée)
+            ' FILTRE NON-SACEM : seuls les membres SACEM sont inclus
             Dim editeursUniques As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
             
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
+                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
                 
                 Dim key As String = NormalizeDesignation(ayant.Identite.Designation)
                 If Not editeursUniques.ContainsKey(key) Then
@@ -113,11 +115,23 @@ Public Class SuperbaliseGenerator
                 End If
             Next
 
+            ' Calculer le total PH SACEM éditeurs pour recalculer sur 100%
+            Dim totalSACEM As Double = GetTotalSACEMPH({"E"})
+
             ' Générer les paragraphes pour chaque éditeur unique
             For Each kvp In editeursUniques
                 Dim ayant As AyantDroit = kvp.Value
+
+                ' Recalculer le PH sur 100% de la part éditeur SACEM
+                Dim phBrut As Double
+                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phBrut)
+                Dim copie As New AyantDroit()
+                CopyAyantDroit(ayant, copie)
+                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
                 
-                Dim templateKey As String = GetTemplateKey(ayant)
+                Dim templateKey As String = GetTemplateKey(copie)
                 If String.IsNullOrEmpty(templateKey) Then Continue For
 
                 If Not isFirst Then
@@ -125,7 +139,7 @@ Public Class SuperbaliseGenerator
                 End If
                 isFirst = False
 
-                Dim segments As List(Of FormattedSegment) = _paragraphReader.ApplyTemplateFormatted(templateKey, ayant)
+                Dim segments As List(Of FormattedSegment) = _paragraphReader.ApplyTemplateFormatted(templateKey, copie)
                 allSegments.AddRange(segments)
             Next
 
@@ -140,6 +154,7 @@ Public Class SuperbaliseGenerator
     ''' <summary>
     ''' Génère le contenu pour {editeurspart} (version texte simple)
     ''' SANS DOUBLONS
+    ''' FILTRE NON-SACEM : seuls les membres SACEM sont inclus
     ''' </summary>
     Public Function GenerateEditeursPart() As String
         Try
@@ -150,6 +165,7 @@ Public Class SuperbaliseGenerator
             
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
+                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
                 
                 Dim key As String = NormalizeDesignation(ayant.Identite.Designation)
                 If Not editeursUniques.ContainsKey(key) Then
@@ -157,13 +173,25 @@ Public Class SuperbaliseGenerator
                 End If
             Next
 
+            ' Calculer le total PH SACEM éditeurs pour recalculer sur 100%
+            Dim totalSACEM As Double = GetTotalSACEMPH({"E"})
+
             For Each kvp In editeursUniques
                 Dim ayant As AyantDroit = kvp.Value
+
+                ' Recalculer le PH sur 100% de la part éditeur SACEM
+                Dim phBrut As Double
+                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phBrut)
+                Dim copie As New AyantDroit()
+                CopyAyantDroit(ayant, copie)
+                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
                 
-                Dim templateKey As String = GetTemplateKey(ayant)
+                Dim templateKey As String = GetTemplateKey(copie)
                 If String.IsNullOrEmpty(templateKey) Then Continue For
 
-                Dim paragraphe As String = _paragraphReader.ApplyTemplate(templateKey, ayant)
+                Dim paragraphe As String = _paragraphReader.ApplyTemplate(templateKey, copie)
                 If Not String.IsNullOrEmpty(paragraphe) Then
                     resultats.Add(paragraphe)
                 End If
@@ -212,6 +240,7 @@ Public Class SuperbaliseGenerator
             
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
+                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
                 
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
@@ -531,6 +560,7 @@ Public Class SuperbaliseGenerator
             
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
+                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
                 
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
@@ -712,13 +742,43 @@ Public Class SuperbaliseGenerator
     End Function
 
     ''' <summary>
-    ''' Combine les rôles A et C en AC pour un même ayant droit
-    ''' Utilise une clé normalisée pour détecter les doublons
+    ''' Calcule le total PH SACEM pour un rôle donné ("A","C","AC" = auteurs/compositeurs, "E" = éditeurs)
+    ''' et retourne un ratio pour recalculer sur 100%.
+    ''' Les PH sont exprimés sur 50% (part auteur ou part éditeur de l'œuvre totale).
     ''' </summary>
+    Private Function GetTotalSACEMPH(roleFilter As String()) As Double
+        Dim total As Double = 0
+        For Each ayant In _data.AyantsDroit
+            If Not roleFilter.Contains(ayant.BDO.Role) Then Continue For
+            If Not IsSACEMMember(ayant) Then Continue For
+            Dim ph As Double
+            If Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                               Globalization.NumberStyles.Any,
+                               Globalization.CultureInfo.InvariantCulture, ph) Then
+                total += ph
+            End If
+        Next
+        Return If(total > 0, total, 1) ' Éviter division par zéro
+    End Function
+
+    ''' <summary>
+    ''' Recalcule un PH brut (sur 50%) en pourcentage sur 100% de la part SACEM.
+    ''' </summary>
+    Private Function RecalculatePH(phBrut As Double, totalSACEM As Double) As String
+        Dim phRecalcule As Double = phBrut / totalSACEM * 100
+        Return phRecalcule.ToString("F2", Globalization.CultureInfo.InvariantCulture)
+    End Function
+
     Private Function CombineRolesAC() As Dictionary(Of String, AyantDroit)
         Dim combined As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
 
+        ' Calculer le total PH SACEM auteurs/compositeurs pour recalculer sur 100%
+        Dim totalSACEM As Double = GetTotalSACEMPH({"A", "C", "AD"})
+
         For Each ayant In _data.AyantsDroit
+            ' Exclure les NON-SACEM
+            If Not IsSACEMMember(ayant) Then Continue For
+            
             ' Créer une clé normalisée basée sur Designation OU Nom+Prenom
             Dim key As String
             If Not String.IsNullOrEmpty(ayant.Identite.Designation) Then
@@ -736,14 +796,39 @@ Public Class SuperbaliseGenerator
                    (combined(key).BDO.Role = "A" OrElse combined(key).BDO.Role = "C") Then
                     combined(key).BDO.Role = "AC"
                 End If
+                ' Cumuler le PH brut pour recalcul
+                Dim phExistant As Double
+                Double.TryParse(If(combined(key).BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phExistant)
+                Dim phNouveau As Double
+                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phNouveau)
+                combined(key).BDO.PH = RecalculatePH(phExistant + phNouveau, totalSACEM)
             Else
                 Dim copie As New AyantDroit()
                 CopyAyantDroit(ayant, copie)
+                ' Recalculer le PH sur 100% de la part auteur SACEM
+                Dim phBrut As Double
+                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phBrut)
+                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
                 combined(key) = copie
             End If
         Next
 
         Return combined
+    End Function
+    
+    ''' <summary>
+    ''' Vérifie si un ayant droit est membre SACEM
+    ''' Retourne True si SACEM ou si SocieteGestion est vide (défaut = SACEM)
+    ''' </summary>
+    Private Function IsSACEMMember(ayant As AyantDroit) As Boolean
+        Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+        Return String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
     End Function
 
     ''' <summary>
@@ -849,5 +934,227 @@ Public Class SuperbaliseGenerator
         Dim ayant As New AyantDroit()
         ayant.Identite.Designation = designation
         Return ayant
+    End Function
+
+    ' =====================================================
+    ' GÉNÉRATION DES BLOCS NON-SACEM (FACTORISÉS)
+    ' Blocs atomiques dans template_paragrahs.docx :
+    ' - MENTION_NONSACEM : Coédition + EDITEUR
+    ' - LIST_NONSACEM : Non-signataire + lettre
+    ' - OGC_NONSACEM : Droits collectés OGC
+    ' - BDO_NONSACEM : Commentaire BDO
+    ' =====================================================
+
+    ''' <summary>
+    ''' Génère le bloc {MENTION_NONSACEM}
+    ''' Coédition + "l'EDITEUR"
+    ''' Utilisé dans : CCEOM Art.11, CCEOM Art.16, COED Art.3
+    ''' </summary>
+    Public Function GenerateMentionNonSACEM() As String
+        Try
+            If Not HasNonSACEM() Then Return ""
+            
+            Dim template As String = _paragraphReader.GetTemplate("MENTION_NONSACEM")
+            If String.IsNullOrEmpty(template) Then Return ""
+            
+            Return ApplyNonSACEMBalises(template)
+            
+        Catch ex As Exception
+            Debug.WriteLine($"Erreur GenerateMentionNonSACEM: {ex.Message}")
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Génère le bloc {LIST_NONSACEM}
+    ''' Non-signataire + "lettre de répartition ci-après annexée"
+    ''' Utilisé dans : CCEOM Art.16, COED Art.3
+    ''' </summary>
+    Public Function GenerateListNonSACEM() As String
+        Try
+            If Not HasNonSACEM() Then Return ""
+            
+            Dim template As String = _paragraphReader.GetTemplate("LIST_NONSACEM")
+            If String.IsNullOrEmpty(template) Then Return ""
+            
+            Return ApplyNonSACEMBalises(template)
+            
+        Catch ex As Exception
+            Debug.WriteLine($"Erreur GenerateListNonSACEM: {ex.Message}")
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Génère le bloc {OGC_NONSACEM}
+    ''' "Les droits collectés par les Organismes de gestion collective..."
+    ''' Utilisé dans : COED Art.3
+    ''' </summary>
+    Public Function GenerateOGCNonSACEM() As String
+        Try
+            If Not HasNonSACEM() Then Return ""
+            
+            Dim template As String = _paragraphReader.GetTemplate("OGC_NONSACEM")
+            If String.IsNullOrEmpty(template) Then Return ""
+            
+            Return ApplyNonSACEMBalises(template)
+            
+        Catch ex As Exception
+            Debug.WriteLine($"Erreur GenerateOGCNonSACEM: {ex.Message}")
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Génère le bloc {BDO_NONSACEM}
+    ''' Commentaire pour le BDO
+    ''' </summary>
+    Public Function GenerateBDONonSACEM() As String
+        Try
+            If Not HasNonSACEM() Then Return ""
+            
+            Dim template As String = _paragraphReader.GetTemplate("BDO_NONSACEM")
+            If String.IsNullOrEmpty(template) Then Return ""
+            
+            Return ApplyNonSACEMBalises(template)
+            
+        Catch ex As Exception
+            Debug.WriteLine($"Erreur GenerateBDONonSACEM: {ex.Message}")
+            Return ""
+        End Try
+    End Function
+
+    ''' <summary>
+    ''' Vérifie s'il y a des ayants droit NON-SACEM
+    ''' </summary>
+    Private Function HasNonSACEM() As Boolean
+        For Each ayant In _data.AyantsDroit
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            If Not String.IsNullOrEmpty(societe) AndAlso societe <> "SACEM" Then
+                Return True
+            End If
+        Next
+        Return False
+    End Function
+
+    ''' <summary>
+    ''' Applique les balises NON-SACEM à un template
+    ''' </summary>
+    Private Function ApplyNonSACEMBalises(template As String) As String
+        ' Collecter les données NON-SACEM
+        Dim listeAC_SACEM As New List(Of String)
+        Dim listeESACEM As New List(Of String)
+        Dim listeNonSACEM As New List(Of String)
+        Dim listeNonSACEM_Noms As New List(Of String)
+        Dim partsSACEM As Double = 0
+        Dim partsNonSACEM As Double = 0
+        Dim countNonSACEM As Integer = 0
+        Dim editeurDeInfo As String = ""
+        
+        For Each ayant In _data.AyantsDroit
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
+            Dim isSACEM As Boolean = (societe = "SACEM" OrElse String.IsNullOrEmpty(societe))
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
+            Dim isE As Boolean = (role = "E")
+            
+            Dim ph As Double = 0
+            Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, ph)
+            
+            Dim displayName As String = GetDisplayName(ayant)
+            Dim societeAffichage As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            
+            If isSACEM Then
+                partsSACEM += ph
+                If isAC AndAlso Not listeAC_SACEM.Contains(displayName) Then
+                    listeAC_SACEM.Add(displayName)
+                End If
+                If isE AndAlso Not listeESACEM.Contains(displayName) Then
+                    listeESACEM.Add(displayName)
+                End If
+            Else
+                partsNonSACEM += ph
+                countNonSACEM += 1
+                Dim nomAvecSociete As String = $"{displayName} ({societeAffichage})"
+                If Not listeNonSACEM.Contains(nomAvecSociete) Then
+                    listeNonSACEM.Add(nomAvecSociete)
+                End If
+                If Not listeNonSACEM_Noms.Contains(displayName) Then
+                    listeNonSACEM_Noms.Add(displayName)
+                End If
+                
+                ' Détecter éditeur étranger qui édite un AC SACEM
+                If isE Then
+                    Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
+                    If Not String.IsNullOrEmpty(lettrage) Then
+                        For Each autreAyant In _data.AyantsDroit
+                            Dim autreSociete As String = If(autreAyant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
+                            Dim autreIsSACEM As Boolean = (autreSociete = "SACEM" OrElse String.IsNullOrEmpty(autreSociete))
+                            Dim autreRole As String = If(autreAyant.BDO.Role, "").Trim().ToUpper()
+                            Dim autreIsAC As Boolean = (autreRole = "A" OrElse autreRole = "C" OrElse autreRole = "AC" OrElse autreRole = "AR" OrElse autreRole = "AD")
+                            Dim autreLettrage As String = If(autreAyant.BDO.Lettrage, "").Trim().ToUpper()
+                            
+                            If autreIsSACEM AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
+                                editeurDeInfo = $" éditeur de {GetDisplayName(autreAyant)}"
+                                Exit For
+                            End If
+                        Next
+                    End If
+                End If
+            End If
+        Next
+        
+        ' Formater les valeurs
+        Dim strPartsSACEM As String = Math.Round(partsSACEM, 2).ToString("F2", Globalization.CultureInfo.GetCultureInfo("fr-FR")).Replace(".", ",")
+        Dim strPartsNonSACEM As String = Math.Round(partsNonSACEM, 2).ToString("F2", Globalization.CultureInfo.GetCultureInfo("fr-FR")).Replace(".", ",")
+        Dim strListeAC_SACEM As String = FormatListeEt(listeAC_SACEM)
+        Dim strListeESACEM As String = FormatListeEt(listeESACEM)
+        Dim strListeNonSACEM As String = FormatListeEt(listeNonSACEM)
+        Dim strListeNonSACEM_Noms As String = FormatListeEt(listeNonSACEM_Noms)
+        
+        ' Pluriel/Singulier
+        Dim isPluriel As Boolean = (countNonSACEM > 1)
+        Dim strEstSont As String = If(isPluriel, "sont", "est")
+        Dim strIlIls As String = If(isPluriel, "Ils", "Il")
+        Dim strNestPas As String = If(isPluriel, "ne sont pas", "n'est pas")
+        Dim strPluriel As String = If(isPluriel, "s", "")
+        
+        ' Remplacer les balises dans le template
+        Dim result As String = template
+        result = result.Replace("[ListeAC_SACEM]", strListeAC_SACEM)
+        result = result.Replace("[ListeE_SACEM]", strListeESACEM)
+        result = result.Replace("[ListeNonSACEM]", strListeNonSACEM)
+        result = result.Replace("[ListeNonSACEM_Noms]", strListeNonSACEM_Noms)
+        result = result.Replace("[PartsSACEM]", strPartsSACEM)
+        result = result.Replace("[PartsNonSACEM]", strPartsNonSACEM)
+        result = result.Replace("[EstSont]", strEstSont)
+        result = result.Replace("[IlIls]", strIlIls)
+        result = result.Replace("[NestPasNeSontPas]", strNestPas)
+        result = result.Replace("[Pluriel]", strPluriel)
+        result = result.Replace("[EditeurDe]", editeurDeInfo)
+        
+        Return result.Trim()
+    End Function
+
+    ''' <summary>
+    ''' Obtient le nom d'affichage d'un ayant droit
+    ''' </summary>
+    Private Function GetDisplayName(ayant As AyantDroit) As String
+        If ayant.Identite.Type = "Moral" Then
+            Return If(ayant.Identite.Designation, "")
+        End If
+        
+        Dim prenom As String = If(ayant.Identite.Prenom, "").Trim()
+        Dim nom As String = If(ayant.Identite.Nom, "").Trim().ToUpper()
+        
+        If Not String.IsNullOrEmpty(prenom) AndAlso Not String.IsNullOrEmpty(nom) Then
+            Return $"{prenom} {nom}"
+        ElseIf Not String.IsNullOrEmpty(nom) Then
+            Return nom
+        ElseIf Not String.IsNullOrEmpty(prenom) Then
+            Return prenom
+        Else
+            Return If(ayant.Identite.Designation, "")
+        End If
     End Function
 End Class

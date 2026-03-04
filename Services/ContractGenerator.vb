@@ -133,7 +133,7 @@ Public Class ContractGenerator
 
     ''' <summary>
     ''' Fusionne les runs dans un paragraphe pour reconstituer les balises fragmentées
-    ''' PRÉSERVE LE FORMATAGE (gras, italique, couleur, etc.)
+    ''' VERSION SIMPLIFIÉE ET ROBUSTE
     ''' </summary>
     Private Sub MergeRunsInParagraph(paragraph As Paragraph)
         Dim runs = paragraph.Descendants(Of Run)().ToList()
@@ -142,86 +142,57 @@ Public Class ContractGenerator
         ' Obtenir le texte complet du paragraphe
         Dim fullText As String = String.Join("", runs.Select(Function(r) r.InnerText))
 
-        ' Vérifier s'il y a des balises ou superbalises à fusionner
+        ' Vérifier s'il y a des balises à fusionner
         If Not (fullText.Contains("[") OrElse fullText.Contains("{")) Then Return
 
-        ' Identifier les runs qui contiennent des parties de balises
-        ' et les fusionner uniquement si nécessaire
+        ' Vérifier si une balise est fragmentée (présente dans fullText mais pas dans un seul run)
+        Dim balisePattern As New Regex("\{[A-Za-z0-9_]+\}|\[[A-Za-z0-9_/]+\]")
+        Dim matches = balisePattern.Matches(fullText)
+        
+        Dim needsMerge As Boolean = False
+        For Each m As Match In matches
+            Dim balise As String = m.Value
+            Dim foundInSingleRun As Boolean = runs.Any(Function(r) r.InnerText.Contains(balise))
+            If Not foundInSingleRun Then
+                needsMerge = True
+                Exit For
+            End If
+        Next
+        
+        If Not needsMerge Then Return
+        
+        ' APPROCHE SIMPLE: Fusionner TOUS les runs du paragraphe en un seul
+        ' en préservant le formatage du premier run qui contient du texte
         Try
-            Dim i As Integer = 0
-            While i < runs.Count
-                Dim currentRun = runs(i)
-                Dim currentText As String = currentRun.InnerText
-
-                ' Compter les crochets/accolades ouvrants et fermants
-                Dim openBrackets As Integer = currentText.Count(Function(c) c = "["c)
-                Dim closeBrackets As Integer = currentText.Count(Function(c) c = "]"c)
-                Dim openBraces As Integer = currentText.Count(Function(c) c = "{"c)
-                Dim closeBraces As Integer = currentText.Count(Function(c) c = "}"c)
-                
-                ' Vérifier si ce run a une balise non terminée
-                Dim hasUnmatchedBracket As Boolean = openBrackets > closeBrackets
-                Dim hasUnmatchedBrace As Boolean = openBraces > closeBraces
-                
-                If hasUnmatchedBracket OrElse hasUnmatchedBrace Then
-                    ' Fusionner avec les runs suivants jusqu'à équilibrer
-                    Dim mergedText As New StringBuilder(currentText)
-                    Dim runsToRemove As New List(Of Run)
-                    Dim j As Integer = i + 1
-                    
-                    Dim totalOpenBrackets As Integer = openBrackets
-                    Dim totalCloseBrackets As Integer = closeBrackets
-                    Dim totalOpenBraces As Integer = openBraces
-                    Dim totalCloseBraces As Integer = closeBraces
-                    
-                    While j < runs.Count
-                        Dim nextRun = runs(j)
-                        Dim nextText As String = nextRun.InnerText
-                        mergedText.Append(nextText)
-                        runsToRemove.Add(nextRun)
-                        
-                        ' Mettre à jour les compteurs
-                        totalOpenBrackets += nextText.Count(Function(c) c = "["c)
-                        totalCloseBrackets += nextText.Count(Function(c) c = "]"c)
-                        totalOpenBraces += nextText.Count(Function(c) c = "{"c)
-                        totalCloseBraces += nextText.Count(Function(c) c = "}"c)
-                        
-                        ' Vérifier si on a équilibré toutes les balises
-                        Dim bracketsBalanced As Boolean = totalOpenBrackets <= totalCloseBrackets
-                        Dim bracesBalanced As Boolean = totalOpenBraces <= totalCloseBraces
-                        
-                        If bracketsBalanced AndAlso bracesBalanced Then Exit While
-                        
-                        j += 1
-                    End While
-                    
-                    ' Mettre à jour le texte du run courant
-                    Dim textElements = currentRun.Descendants(Of Text)().ToList()
-                    If textElements.Count > 0 Then
-                        textElements(0).Text = mergedText.ToString()
-                        ' Supprimer les autres éléments Text s'il y en a
-                        For k As Integer = 1 To textElements.Count - 1
-                            textElements(k).Remove()
-                        Next
-                    Else
-                        ' Créer un nouvel élément Text
-                        Dim newText As New Text(mergedText.ToString())
-                        newText.Space = SpaceProcessingModeValues.Preserve
-                        currentRun.Append(newText)
-                    End If
-                    
-                    ' Supprimer les runs fusionnés
-                    For Each runToRemove In runsToRemove
-                        runToRemove.Remove()
-                    Next
-                    
-                    ' Mettre à jour la liste des runs
-                    runs = paragraph.Descendants(Of Run)().ToList()
-                End If
-                
-                i += 1
-            End While
-
+            ' Trouver le premier run avec du texte pour copier son formatage
+            Dim firstRunWithText As Run = runs.FirstOrDefault(Function(r) Not String.IsNullOrEmpty(r.InnerText))
+            If firstRunWithText Is Nothing Then Return
+            
+            ' Sauvegarder le formatage
+            Dim savedRunProps As RunProperties = Nothing
+            If firstRunWithText.RunProperties IsNot Nothing Then
+                savedRunProps = CType(firstRunWithText.RunProperties.CloneNode(True), RunProperties)
+            End If
+            
+            ' Créer un nouveau run avec tout le texte
+            Dim newRun As New Run()
+            If savedRunProps IsNot Nothing Then
+                newRun.RunProperties = savedRunProps
+            End If
+            
+            ' Ajouter le texte complet
+            Dim newText As New Text(fullText)
+            newText.Space = SpaceProcessingModeValues.Preserve
+            newRun.Append(newText)
+            
+            ' Insérer le nouveau run avant le premier
+            runs(0).InsertBeforeSelf(newRun)
+            
+            ' Supprimer tous les anciens runs
+            For Each oldRun In runs
+                oldRun.Remove()
+            Next
+            
         Catch ex As Exception
             Debug.WriteLine($"Erreur fusion runs: {ex.Message}")
         End Try
@@ -664,6 +635,42 @@ Public Class ContractGenerator
             If tabSignature IsNot Nothing Then
                 superbalises("tabsignature") = tabSignature
                 _log.Add("    → Tableau de signatures créé")
+            End If
+
+            ' =====================================================
+            ' BLOCS NON-SACEM (factorisés)
+            ' =====================================================
+            
+            ' {MENTION_NONSACEM} - Coédition + EDITEUR
+            _log.Add("  - Génération {MENTION_NONSACEM}...")
+            Dim mentionNonSACEM As String = superGen.GenerateMentionNonSACEM()
+            superbalises("MENTION_NONSACEM") = If(mentionNonSACEM, "")
+            If Not String.IsNullOrEmpty(mentionNonSACEM) Then
+                _log.Add("    → Bloc MENTION_NONSACEM généré")
+            End If
+            
+            ' {LIST_NONSACEM} - Non-signataire + lettre
+            _log.Add("  - Génération {LIST_NONSACEM}...")
+            Dim listNonSACEM As String = superGen.GenerateListNonSACEM()
+            superbalises("LIST_NONSACEM") = If(listNonSACEM, "")
+            If Not String.IsNullOrEmpty(listNonSACEM) Then
+                _log.Add("    → Bloc LIST_NONSACEM généré")
+            End If
+            
+            ' {OGC_NONSACEM} - Droits collectés OGC
+            _log.Add("  - Génération {OGC_NONSACEM}...")
+            Dim ogcNonSACEM As String = superGen.GenerateOGCNonSACEM()
+            superbalises("OGC_NONSACEM") = If(ogcNonSACEM, "")
+            If Not String.IsNullOrEmpty(ogcNonSACEM) Then
+                _log.Add("    → Bloc OGC_NONSACEM généré")
+            End If
+            
+            ' {BDO_NONSACEM} - Commentaire BDO
+            _log.Add("  - Génération {BDO_NONSACEM}...")
+            Dim bdoNonSACEM As String = superGen.GenerateBDONonSACEM()
+            superbalises("BDO_NONSACEM") = If(bdoNonSACEM, "")
+            If Not String.IsNullOrEmpty(bdoNonSACEM) Then
+                _log.Add("    → Bloc BDO_NONSACEM généré")
             End If
 
         Catch ex As Exception

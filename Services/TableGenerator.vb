@@ -54,10 +54,12 @@ Public Class TableGenerator
         table.Append(headerRow)
 
         ' Collecter les créateurs avec leurs infos (sans doublons, combinant A+C)
+        ' FILTRE NON-SACEM : seuls les membres SACEM sont inclus
         Dim createursInfo As New Dictionary(Of String, CreatorInfo)(StringComparer.OrdinalIgnoreCase)
 
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role = "E" Then Continue For
+            If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
             
             Dim key As String = GetAyantKey(ayant)
             Dim ph As Double
@@ -161,10 +163,12 @@ Public Class TableGenerator
         table.Append(headerRow)
 
         ' Collecter les créateurs avec leurs infos (sans doublons, combinant A+C)
+        ' FILTRE NON-SACEM : seuls les membres SACEM sont inclus
         Dim createursInfo As New Dictionary(Of String, CreatorInfo)(StringComparer.OrdinalIgnoreCase)
 
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role = "E" Then Continue For
+            If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
             
             Dim key As String = GetAyantKey(ayant)
             Dim ph As Double
@@ -237,6 +241,7 @@ Public Class TableGenerator
         
         ' =============================================
         ' 1. D'ABORD LES AUTEURS/COMPOSITEURS (ordre de {auteurspart})
+        ' FILTRE NON-SACEM : seuls les membres SACEM signent
         ' =============================================
         If typeTemplate <> "COED" Then
             Dim auteursDict As New Dictionary(Of String, SignatureInfo)(StringComparer.OrdinalIgnoreCase)
@@ -245,6 +250,7 @@ Public Class TableGenerator
             For Each ayant In _data.AyantsDroit
                 Dim role As String = ayant.BDO.Role
                 If role = "E" Then Continue For ' Ignorer les éditeurs pour cette partie
+                If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
                 
                 ' Clé : Prénom NOM
                 Dim prenom As String = If(ayant.Identite.Prenom, "").Trim()
@@ -296,11 +302,13 @@ Public Class TableGenerator
         
         ' =============================================
         ' 2. ENSUITE LES ÉDITEURS (ordre de {editeurspart})
+        ' FILTRE NON-SACEM : seuls les membres SACEM signent
         ' =============================================
         Dim editeursDict As New Dictionary(Of String, SignatureInfo)(StringComparer.OrdinalIgnoreCase)
         
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role <> "E" Then Continue For
+            If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
             
             Dim displayName As String = If(ayant.Identite.Designation, "").Trim()
             Dim key As String = NormalizeKey(displayName)
@@ -1053,4 +1061,14 @@ Public Class TableGenerator
         Public Property Role As String
         Public Property PH As Double
     End Class
+    
+    ''' <summary>
+    ''' Vérifie si un ayant droit est membre SACEM
+    ''' Retourne True si SACEM ou si SocieteGestion est vide (défaut = SACEM)
+    ''' Retourne False si membre d'une autre société (GEMA, KODA, etc.)
+    ''' </summary>
+    Private Function IsSACEM(ayant As AyantDroit) As Boolean
+        Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+        Return String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+    End Function
 End Class
