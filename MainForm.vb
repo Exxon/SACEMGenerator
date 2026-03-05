@@ -500,6 +500,19 @@ Public Class MainForm
     ''' <summary>
     ''' Bouton "Effacer les logs"
     ''' </summary>
+    Private Sub btnEditJson_Click(sender As Object, e As EventArgs) Handles btnEditJson.Click
+        Dim editorPath As String = If(_currentJsonPath, "")
+        Using editor As New JsonEditorForm(editorPath)
+            editor.ShowDialog()
+            If Not String.IsNullOrEmpty(editor.SavedJsonPath) AndAlso
+               File.Exists(editor.SavedJsonPath) Then
+                _currentJsonPath = editor.SavedJsonPath
+                txtJsonPath.Text = _currentJsonPath
+                LoadAndValidateJson()
+            End If
+        End Using
+    End Sub
+
     Private Sub btnClearLog_Click(sender As Object, e As EventArgs) Handles btnClearLog.Click
         txtLog.Clear()
         txtLog.AppendText("=== SACEM GENERATOR - VB.NET ===" & vbCrLf)
@@ -540,14 +553,14 @@ Public Class MainForm
     ''' </summary>
     Private Sub InitializeComponent()
         Me.Text = "SACEM Generator - VB.NET"
-        Me.Size = New Size(900, 750)
+        Me.Size = New Size(900, 780)
         Me.StartPosition = FormStartPosition.CenterScreen
 
         ' GroupBox - Sélection JSON
         Dim grpJson As New GroupBox()
         grpJson.Text = "1. Sélection du fichier JSON"
         grpJson.Location = New Point(10, 10)
-        grpJson.Size = New Size(860, 130)
+        grpJson.Size = New Size(860, 155)
 
         txtJsonPath = New TextBox()
         txtJsonPath.Location = New Point(10, 25)
@@ -560,6 +573,15 @@ Public Class MainForm
         btnSelectJson.Location = New Point(720, 23)
         btnSelectJson.Size = New Size(120, 25)
         grpJson.Controls.Add(btnSelectJson)
+
+        btnEditJson = New Button()
+        btnEditJson.Text = "Créer / Éditer JSON"
+        btnEditJson.Location = New Point(720, 55)
+        btnEditJson.Size = New Size(120, 25)
+        btnEditJson.BackColor = Color.FromArgb(16, 124, 16)
+        btnEditJson.ForeColor = Color.White
+        btnEditJson.FlatStyle = FlatStyle.Flat
+        grpJson.Controls.Add(btnEditJson)
 
         ' Ligne 1 : Titre et Interprète
         lblTitre = New Label()
@@ -626,7 +648,7 @@ Public Class MainForm
         ' GroupBox - Configuration
         Dim grpConfig As New GroupBox()
         grpConfig.Text = "2. Configuration des chemins"
-        grpConfig.Location = New Point(10, 150)
+        grpConfig.Location = New Point(10, 175)
         grpConfig.Size = New Size(860, 100)
 
         Dim lblTemplates As New Label()
@@ -670,7 +692,7 @@ Public Class MainForm
         ' GroupBox - Génération
         Dim grpGeneration As New GroupBox()
         grpGeneration.Text = "3. Génération des documents"
-        grpGeneration.Location = New Point(10, 260)
+        grpGeneration.Location = New Point(10, 285)
         grpGeneration.Size = New Size(860, 80)
 
         btnGenerateBDO = New Button()
@@ -703,7 +725,7 @@ Public Class MainForm
         ' GroupBox - Logs
         Dim grpLogs As New GroupBox()
         grpLogs.Text = "4. Logs de génération"
-        grpLogs.Location = New Point(10, 350)
+        grpLogs.Location = New Point(10, 375)
         grpLogs.Size = New Size(860, 350)
 
         txtLog = New TextBox()
@@ -748,4 +770,5 @@ Public Class MainForm
     Private WithEvents btnOpenOutput As Button
     Private WithEvents txtLog As TextBox
     Private WithEvents btnClearLog As Button
+    Private WithEvents btnEditJson As Button
 End Class
