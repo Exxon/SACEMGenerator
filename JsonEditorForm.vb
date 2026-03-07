@@ -633,7 +633,7 @@ Public Class JsonEditorForm
             For Each row As DataRow In DtPersonPhy.Rows
                 Dim pseudo As String = SafeStr(row, "Pseudonyme")
                 Dim nom As String = SafeStr(row, "Nom")
-                Dim prenom As String = SafeStr(row, "Prénom")
+                Dim prenom As String = SafeStr(row, "Prenom")
                 If Not String.IsNullOrEmpty(pseudo) OrElse Not String.IsNullOrEmpty(nom & prenom) Then
                     items.Add($"{pseudo} / {nom} / {prenom}")
                 End If
@@ -795,7 +795,7 @@ Public Class JsonEditorForm
         Dim foundRow As DataRow = Nothing
         For Each r As DataRow In DtPersonPhy.Rows
             Dim rNom As String = r("Nom").ToString().Trim()
-            Dim rPrenom As String = SafeStr(r, "Prénom").Trim()
+            Dim rPrenom As String = SafeStr(r, "Prenom").Trim()
             Dim rPseudo As String = r("Pseudonyme").ToString().Trim()
             If (rNom = nom AndAlso rPrenom = prenom) OrElse
                (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
@@ -807,7 +807,7 @@ Public Class JsonEditorForm
 
         ' Rôle
         Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing, cbGenre.SelectedItem.ToString(), cbGenre.Text)
-        Dim role As String = SafeStr(foundRow, "Rôle")
+        Dim role As String = SafeStr(foundRow, "Role")
         role = AjusterRole(role, genre)
 
         If String.IsNullOrEmpty(role) Then
@@ -820,10 +820,11 @@ Public Class JsonEditorForm
 
         Dim nr As DataRow = DtDepotCreateur.NewRow()
         nr("Type") = "Physique"
+        nr("Id") = SafeStr(foundRow, "Id")
         nr("Designation") = BuildDesignation(foundRow)
         nr("Pseudonyme") = SafeStr(foundRow, "Pseudonyme")
         nr("Nom") = SafeStr(foundRow, "Nom")
-        nr("Prenom") = SafeStr(foundRow, "Prénom")
+        nr("Prenom") = SafeStr(foundRow, "Prenom")
         nr("Genre") = SafeStr(foundRow, "Genre")
         nr("SocieteGestion") = SafeStr(foundRow, "SocieteGestion", "SACEM")
         nr("Role") = role
@@ -1461,7 +1462,7 @@ Public Class JsonEditorForm
 
     Private Function BuildDesignation(row As DataRow) As String
         Dim nom As String = SafeStr(row, "Nom")
-        Dim prenom As String = SafeStr(row, "Prénom")
+        Dim prenom As String = SafeStr(row, "Prenom")
         Dim pseudo As String = SafeStr(row, "Pseudonyme")
         Return $"{nom} {prenom}".Trim() & If(String.IsNullOrEmpty(pseudo), "", $" / {pseudo}")
     End Function
@@ -1474,7 +1475,7 @@ Public Class JsonEditorForm
         dest("Ville") = SafeStr(source, "Ville")
         dest("Pays") = SafeStr(source, "Pays", "FRANCE")
         dest("Mail") = SafeStr(source, "Mail")
-        dest("Tel") = SafeStr(source, "Tél")
+        dest("Tel") = SafeStr(source, "Tel")
     End Sub
 
     Private Sub CopierInfosMorale(dest As DataRow, source As DataRow)
@@ -1620,29 +1621,51 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille)
-            row("Pseudonyme") = res(0)
-            row("Nom") = res(1)
-            row("Prenom") = res(2)
-            row("Genre") = res(3)
-            row("Role") = res(5)
-            Dim coad As String = res(6).Trim()
-            Dim ipi As String = res(7).Trim()
+            ' Mettre à jour DtDepotCreateur (grille) — résolution par nom de colonne
+            Dim idxPseudo As Integer = Array.IndexOf(cols, "Pseudonyme")
+            Dim idxNom As Integer = Array.IndexOf(cols, "Nom")
+            Dim idxPrenom As Integer = Array.IndexOf(cols, "Prenom")
+            Dim idxGenre As Integer = Array.IndexOf(cols, "Genre")
+            Dim idxRole As Integer = Array.IndexOf(cols, "Role")
+            Dim idxCOAD As Integer = Array.IndexOf(cols, "COAD")
+            Dim idxIPI As Integer = Array.IndexOf(cols, "IPI")
+            Dim idxNumV As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim idxTypeV As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim idxNomV As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim idxCP As Integer = Array.IndexOf(cols, "CP")
+            Dim idxVille As Integer = Array.IndexOf(cols, "Ville")
+            Dim idxMail As Integer = Array.IndexOf(cols, "Mail")
+            Dim idxTel As Integer = Array.IndexOf(cols, "Tel")
+            Dim idxId As Integer = Array.IndexOf(cols, "Id")
+
+            Dim pseudo2 As String = If(idxPseudo >= 0, res(idxPseudo).Trim(), "")
+            Dim nom2 As String = If(idxNom >= 0, res(idxNom).Trim(), "")
+            Dim prenom2 As String = If(idxPrenom >= 0, res(idxPrenom).Trim(), "")
+
+            If idxPseudo >= 0 Then row("Pseudonyme") = pseudo2
+            If idxNom >= 0 Then row("Nom") = nom2
+            If idxPrenom >= 0 Then row("Prenom") = prenom2
+            If idxGenre >= 0 Then row("Genre") = res(idxGenre)
+            If idxRole >= 0 Then row("Role") = res(idxRole)
+            If srcRow IsNot Nothing Then row("Id") = SafeStr(srcRow, "Id")
+
+            Dim coad As String = If(idxCOAD >= 0, res(idxCOAD).Trim(), "")
+            Dim ipi As String = If(idxIPI >= 0, res(idxIPI).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            row("NumVoie") = res(9)
-            row("TypeVoie") = res(10)
-            row("NomVoie") = res(11)
-            row("CP") = res(12)
-            row("Ville") = res(13)
-            row("Mail") = res(14)
-            row("Tel") = res(15)
-            Dim nom2 As String = res(1).Trim()
-            Dim prenom2 As String = res(2).Trim()
-            Dim pseudo2 As String = res(0).Trim()
+
+            If idxNumV >= 0 Then row("NumVoie") = res(idxNumV)
+            If idxTypeV >= 0 Then row("TypeVoie") = res(idxTypeV)
+            If idxNomV >= 0 Then row("NomVoie") = res(idxNomV)
+            If idxCP >= 0 Then row("CP") = res(idxCP)
+            If idxVille >= 0 Then row("Ville") = res(idxVille)
+            If idxMail >= 0 Then row("Mail") = res(idxMail)
+            If idxTel >= 0 Then row("Tel") = res(idxTel)
+
+            ' Reconstruire Designation
             If Not String.IsNullOrEmpty(pseudo2) Then
                 row("Designation") = nom2 & " " & prenom2 & " / " & pseudo2
             Else
@@ -1719,29 +1742,51 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille)
-            row("Designation") = res(0)
-            Dim coad As String = res(1).Trim()
-            Dim ipi As String = res(2).Trim()
+            ' Mettre à jour DtDepotCreateur (grille) — résolution par nom de colonne
+            Dim idxDesig As Integer = Array.IndexOf(cols, "Designation")
+            Dim idxIdM As Integer = Array.IndexOf(cols, "Id")
+            Dim idxCOADm As Integer = Array.IndexOf(cols, "COAD")
+            Dim idxIPIm As Integer = Array.IndexOf(cols, "IPI")
+            Dim idxFJ As Integer = Array.IndexOf(cols, "Forme Juridique")
+            Dim idxCap As Integer = Array.IndexOf(cols, "Capital")
+            Dim idxRCS As Integer = Array.IndexOf(cols, "RCS")
+            Dim idxSiren As Integer = Array.IndexOf(cols, "Siren")
+            Dim idxNumVm As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim idxTypeVm As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim idxNomVm As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim idxCPm As Integer = Array.IndexOf(cols, "CP")
+            Dim idxVillem As Integer = Array.IndexOf(cols, "Ville")
+            Dim idxPrenR As Integer = Array.IndexOf(cols, "Prenom representant")
+            Dim idxNomR As Integer = Array.IndexOf(cols, "Nom representant")
+            Dim idxFoncR As Integer = Array.IndexOf(cols, "Fonction representant")
+            Dim idxMailm As Integer = Array.IndexOf(cols, "Mail")
+            Dim idxTelm As Integer = Array.IndexOf(cols, "Tel")
+
+            If idxDesig >= 0 Then row("Designation") = res(idxDesig)
+            If srcRow IsNot Nothing Then row("Id") = SafeStr(srcRow, "Id")
+
+            Dim coad As String = If(idxCOADm >= 0, res(idxCOADm).Trim(), "")
+            Dim ipi As String = If(idxIPIm >= 0, res(idxIPIm).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            row("FormeJuridique") = res(3)
-            row("Capital") = res(4)
-            row("RCS") = res(5)
-            row("Siren") = res(6)
-            row("NumVoie") = res(7)
-            row("TypeVoie") = res(8)
-            row("NomVoie") = res(9)
-            row("CP") = res(10)
-            row("Ville") = res(11)
-            row("PrenomRepresentant") = res(12)
-            row("NomRepresentant") = res(13)
-            row("FonctionRepresentant") = res(14)
-            row("Mail") = res(15)
-            row("Tel") = res(16)
+
+            If idxFJ >= 0 Then row("FormeJuridique") = res(idxFJ)
+            If idxCap >= 0 Then row("Capital") = res(idxCap)
+            If idxRCS >= 0 Then row("RCS") = res(idxRCS)
+            If idxSiren >= 0 Then row("Siren") = res(idxSiren)
+            If idxNumVm >= 0 Then row("NumVoie") = res(idxNumVm)
+            If idxTypeVm >= 0 Then row("TypeVoie") = res(idxTypeVm)
+            If idxNomVm >= 0 Then row("NomVoie") = res(idxNomVm)
+            If idxCPm >= 0 Then row("CP") = res(idxCPm)
+            If idxVillem >= 0 Then row("Ville") = res(idxVillem)
+            If idxPrenR >= 0 Then row("PrenomRepresentant") = res(idxPrenR)
+            If idxNomR >= 0 Then row("NomRepresentant") = res(idxNomR)
+            If idxFoncR >= 0 Then row("FonctionRepresentant") = res(idxFoncR)
+            If idxMailm >= 0 Then row("Mail") = res(idxMailm)
+            If idxTelm >= 0 Then row("Tel") = res(idxTelm)
             dgv.Refresh()
             ApplyRowColors()
             lblStatut.Text = "Personne morale mise à jour."

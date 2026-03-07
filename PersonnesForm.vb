@@ -15,6 +15,11 @@ Public Class PersonnesForm
     Public Shared ReadOnly DefaultXlsxPath As String =
         Path.Combine(Application.StartupPath, "..", "..", "Data", "BDD_IQS_Person.xlsx")
 
+    Public Shared Function ResolveXlsxPath() As String
+        If File.Exists(DefaultXlsxPath) Then Return DefaultXlsxPath
+        Return DefaultXlsxPath
+    End Function
+
     ''' <summary>
     ''' À appeler au démarrage de l'application.
     ''' Crée le dossier Data\ si besoin.
@@ -33,19 +38,19 @@ Public Class PersonnesForm
 
     ' Colonnes PERSONNEPHYSIQUE
     Public Shared ReadOnly ColsPhy As String() = {
-        "Id", "Pseudonyme", "Nom", "Prénom", "Genre", "SocieteGestion",
-        "Editeur", "Rôle", "COAD", "IPI", "IPI 2",
+        "Id", "Pseudonyme", "Nom", "Prenom", "Genre", "Role",
+        "COAD", "IPI", "SocieteGestion", "Editeur",
         "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Pays",
-        "Mail", "Tél", "Date de naissance", "Lieu de naissance", "N° Sécu"
+        "Mail", "Tel", "Date de naissance", "Lieu de naissance", "N Secu"
     }
 
     ' Colonnes PERSONNEMORALE
     Public Shared ReadOnly ColsMor As String() = {
-        "Id", "Designation", "SocieteGestion", "COAD", "IPI",
-        "Forme Juridique", "Capital", "RCS", "Siren",
+        "Id", "Designation", "COAD", "IPI", "Forme Juridique", "Capital",
+        "RCS", "Siren", "SocieteGestion",
         "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Pays",
-        "Prénom representant", "Nom representant", "Fonction representant",
-        "Mail", "Tél"
+        "Prenom representant", "Nom representant", "Fonction representant",
+        "Mail", "Tel"
     }
 
     ' ─────────────────────────────────────────────────────────────
@@ -274,19 +279,18 @@ Public Class PersonnesForm
 
     Private Sub SetColWidths(grid As DataGridView)
         Dim widths As New Dictionary(Of String, Integer) From {
-            {"Id", 72}, {"Pseudonyme", 110}, {"Nom", 110}, {"Prénom", 95}, {"Prenom", 95},
-            {"Genre", 50}, {"SocieteGestion", 80},
-            {"Editeur", 180}, {"Rôle", 45}, {"Role", 45},
-            {"COAD", 80}, {"IPI", 100}, {"IPI 2", 80},
+            {"Id", 72}, {"Pseudonyme", 110}, {"Nom", 110}, {"Prenom", 95},
+            {"Genre", 50}, {"SocieteGestion", 80}, {"Role", 45},
+            {"Editeur", 180}, {"COAD", 80}, {"IPI", 100},
             {"Designation", 210}, {"Forme Juridique", 100}, {"Capital", 70},
             {"RCS", 80}, {"Siren", 95},
             {"Num de voie", 60}, {"Type de voie", 80}, {"Nom de voie", 150},
             {"CP", 60}, {"Ville", 110}, {"Pays", 80},
-            {"Prénom representant", 120}, {"Prenom representant", 120},
-            {"Nom representant", 120}, {"Fonction representant", 130},
-            {"Mail", 180}, {"Tél", 100}, {"Tel", 100},
+            {"Prenom representant", 120}, {"Nom representant", 120},
+            {"Fonction representant", 130},
+            {"Mail", 180}, {"Tel", 100},
             {"Date de naissance", 100}, {"Lieu de naissance", 100},
-            {"N° Sécu", 110}, {"N Secu", 110}
+            {"N Secu", 110}
         }
         For Each col As DataGridViewColumn In grid.Columns
             If widths.ContainsKey(col.HeaderText) Then
@@ -615,7 +619,6 @@ Public Class FichePersonneForm
         Dim dropdowns As New Dictionary(Of String, String())()
         dropdowns("Genre") = New String() {"MR", "MME", "MX"}
         dropdowns("Role") = New String() {"A", "C", "AR", "AD", "E", "A;C"}
-        dropdowns("Rôle") = New String() {"A", "C", "AR", "AD", "E", "A;C"}
         dropdowns("SocieteGestion") = New String() {"SACEM", "SPEDIDAM", "ADAMI", "SCPP"}
         dropdowns("Forme Juridique") = New String() {"SAS", "SARL", "SA", "EURL", "EI", "SNC", "Association", "VAT", "LTD", "Autre"}
         dropdowns("Type de voie") = New String() {"Rue", "Avenue", "Boulevard", "Allée", "Impasse", "Place", "Chemin", "Route", "Passage", "Villa", "Cité", "Floor"}
@@ -658,12 +661,15 @@ Public Class FichePersonneForm
                 Dim tb As New TextBox()
                 tb.Location = New Point(mg + lblW + mg, y + 2)
                 tb.Size = New Size(fldW - 60, 23)
-                tb.Tag = "editeur_main"
-                If currentValues IsNot Nothing AndAlso i < currentValues.Length AndAlso currentValues(i) IsNot Nothing Then
-                    ' Afficher uniquement la 1ère valeur — le reste est géré par lstEditeurs
-                    Dim parts() As String = currentValues(i).Split(";"c)
-                    tb.Text = parts(0).Trim()
-                End If
+                tb.ReadOnly = True
+                tb.BackColor = Color.White
+
+                ' Tag = valeur brute XLSX (Ids), Text = noms lisibles
+                Dim rawVal As String = If(currentValues IsNot Nothing AndAlso i < currentValues.Length,
+                                          If(currentValues(i), ""), "")
+                tb.Tag = rawVal
+                tb.Text = ResolveEditeurIdsToNames(rawVal)
+
                 pnl.Controls.Add(tb)
                 _textFields(i) = tb
 
@@ -675,23 +681,16 @@ Public Class FichePersonneForm
                 btnList.Tag = i
                 pnl.Controls.Add(btnList)
 
-                ' Valeur complète stockée en Tag du TextBox
-                If currentValues IsNot Nothing AndAlso i < currentValues.Length AndAlso currentValues(i) IsNot Nothing Then
-                    tb.Tag = currentValues(i) ' stocker la valeur complète
-                End If
-
                 AddHandler btnList.Click, Sub(s, ev)
                                               Dim idx As Integer = CInt(DirectCast(s, Button).Tag)
+                                              ' Passer la valeur brute (Ids) au dialog
                                               Dim currentVal As String = If(_textFields(idx).Tag IsNot Nothing,
                                                                              _textFields(idx).Tag.ToString(), "")
                                               Using dlg As New EditeurListForm(currentVal)
                                                   If dlg.ShowDialog() = DialogResult.OK Then
+                                                      ' Tag = valeur XLSX (Ids), Text = noms lisibles
                                                       _textFields(idx).Tag = dlg.ValeurEditeurs
-                                                      Dim first() As String = dlg.ValeurEditeurs.Split(";"c)
-                                                      _textFields(idx).Text = If(first.Length > 0, first(0).Trim(), "")
-                                                      If first.Length > 1 Then
-                                                          _textFields(idx).Text &= " (+" & (first.Length - 1) & ")"
-                                                      End If
+                                                      _textFields(idx).Text = dlg.NomEditeurs
                                                   End If
                                               End Using
                                           End Sub
@@ -796,6 +795,67 @@ Public Class FichePersonneForm
         Next
     End Sub
 
+    ''' <summary>
+    ''' Convertit une chaîne XLSX de type "M00001:50;M00002:30" en noms lisibles
+    ''' "Saboteur Records (50%) ; Autre Editeur (30%)" pour affichage uniquement.
+    ''' Charge _dtMor depuis le XLSX si besoin.
+    ''' </summary>
+    Private Function ResolveEditeurIdsToNames(raw As String) As String
+        If String.IsNullOrEmpty(raw) Then Return ""
+        Dim dtMor As DataTable = Nothing
+        Try
+            If File.Exists(PersonnesForm.ResolveXlsxPath()) Then
+                Using pkg As New ExcelPackage(New FileInfo(PersonnesForm.ResolveXlsxPath()))
+                    Dim ws = pkg.Workbook.Worksheets("PERSONNEMORALE")
+                    If ws IsNot Nothing AndAlso ws.Dimension IsNot Nothing Then
+                        dtMor = New DataTable()
+                        For c = 1 To ws.Dimension.Columns
+                            dtMor.Columns.Add(ws.Cells(1, c).Text.Trim())
+                        Next
+                        For r = 2 To ws.Dimension.Rows
+                            Dim nr As DataRow = dtMor.NewRow()
+                            For c = 1 To ws.Dimension.Columns
+                                nr(c - 1) = ws.Cells(r, c).Text.Trim()
+                            Next
+                            dtMor.Rows.Add(nr)
+                        Next
+                    End If
+                End Using
+            End If
+        Catch
+        End Try
+
+        Dim parts As New List(Of String)()
+        For Each entry As String In raw.Split(";"c)
+            Dim t As String = entry.Trim()
+            If String.IsNullOrEmpty(t) Then Continue For
+            Dim colonIdx As Integer = t.LastIndexOf(":"c)
+            Dim idOuNom As String = t
+            Dim pct As String = ""
+            If colonIdx > 0 Then
+                Dim droite As String = t.Substring(colonIdx + 1).Trim()
+                Dim testPct As Double
+                If Double.TryParse(droite, Globalization.NumberStyles.Any,
+                                   Globalization.CultureInfo.InvariantCulture, testPct) Then
+                    idOuNom = t.Substring(0, colonIdx).Trim()
+                    pct = droite
+                End If
+            End If
+            ' Résoudre Id → Designation
+            Dim displayNom As String = idOuNom
+            If dtMor IsNot Nothing AndAlso dtMor.Columns.Contains("Id") AndAlso dtMor.Columns.Contains("Designation") Then
+                For Each mr As DataRow In dtMor.Rows
+                    If mr("Id").ToString().Trim().ToUpper() = idOuNom.ToUpper() Then
+                        displayNom = mr("Designation").ToString().Trim()
+                        Exit For
+                    End If
+                Next
+            End If
+            parts.Add(If(String.IsNullOrEmpty(pct), displayNom, displayNom & " (" & pct & "%)"))
+        Next
+        Return String.Join(" ; ", parts)
+    End Function
+
     Private Sub BtnOK_Click(sender As Object, e As EventArgs)
         Dim firstVal As String = If(_isCombo(0), _comboFields(0).Text.Trim(), _textFields(0).Text.Trim())
         If String.IsNullOrEmpty(firstVal) Then
@@ -815,34 +875,53 @@ End Class
 Public Class EditeurListForm
     Inherits Form
 
+    Public ReadOnly Property NomEditeurs As String
+        Get
+            Dim parts As New List(Of String)()
+            For Each lvi As ListViewItem In lvEditeurs.Items
+                Dim nom As String = lvi.Text.Trim()
+                Dim pct As String = lvi.SubItems(1).Text.Trim()
+                If Not String.IsNullOrEmpty(nom) Then
+                    parts.Add(If(String.IsNullOrEmpty(pct), nom, nom & " (" & pct & "%)"))
+                End If
+            Next
+            Return String.Join(" ; ", parts)
+        End Get
+    End Property
+
     Public ReadOnly Property ValeurEditeurs As String
         Get
             Dim items As New List(Of String)()
-            For Each item As Object In lstEditeurs.Items
-                If Not String.IsNullOrEmpty(item.ToString().Trim()) Then
-                    items.Add(item.ToString().Trim())
+            For Each lvi As ListViewItem In lvEditeurs.Items
+                Dim idOuNom As String = If(lvi.Tag IsNot Nothing AndAlso Not String.IsNullOrEmpty(lvi.Tag.ToString()),
+                                           lvi.Tag.ToString(), lvi.Text.Trim())
+                Dim pct As String = lvi.SubItems(1).Text.Trim()
+                If Not String.IsNullOrEmpty(idOuNom) Then
+                    items.Add(If(String.IsNullOrEmpty(pct), idOuNom, idOuNom & ":" & pct))
                 End If
             Next
             Return String.Join(";", items)
         End Get
     End Property
 
-    Private lstEditeurs As ListBox
-    Private txtNouvel As TextBox
+    Private lvEditeurs As ListView
     Private _dtMor As DataTable
+    Private _lblTotal As Label
+    Private _editTxt As TextBox
+    Private _editItem As ListViewItem
 
     Public Sub New(currentValue As String)
         Me.Text = "Éditeurs associés"
-        Me.Size = New Size(450, 380)
+        Me.Size = New Size(500, 440)
         Me.StartPosition = FormStartPosition.CenterParent
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
         Me.MaximizeBox = False
 
-        ' Charger les morales pour la ComboBox
+        ' ── Charger PERSONNEMORALE ────────────────────────────────
         _dtMor = New DataTable()
         Try
-            If File.Exists(PersonnesForm.DefaultXlsxPath) Then
-                Using pkg As New ExcelPackage(New FileInfo(PersonnesForm.DefaultXlsxPath))
+            If File.Exists(PersonnesForm.ResolveXlsxPath()) Then
+                Using pkg As New ExcelPackage(New FileInfo(PersonnesForm.ResolveXlsxPath()))
                     Dim ws = pkg.Workbook.Worksheets("PERSONNEMORALE")
                     If ws IsNot Nothing AndAlso ws.Dimension IsNot Nothing Then
                         For c = 1 To ws.Dimension.Columns
@@ -861,51 +940,102 @@ Public Class EditeurListForm
         Catch
         End Try
 
-        ' Liste des éditeurs actuels
+        ' ── ListView ──────────────────────────────────────────────
         Dim lblListe As New Label()
-        lblListe.Text = "Éditeurs associés :"
+        lblListe.Text = "Éditeurs associés (double-clic sur Part % pour modifier) :"
         lblListe.Location = New Point(10, 10)
         lblListe.AutoSize = True
         Me.Controls.Add(lblListe)
 
-        lstEditeurs = New ListBox()
-        lstEditeurs.Location = New Point(10, 30)
-        lstEditeurs.Size = New Size(410, 180)
-        Me.Controls.Add(lstEditeurs)
+        lvEditeurs = New ListView()
+        lvEditeurs.Location = New Point(10, 30)
+        lvEditeurs.Size = New Size(465, 190)
+        lvEditeurs.View = View.Details
+        lvEditeurs.FullRowSelect = True
+        lvEditeurs.GridLines = True
+        lvEditeurs.Columns.Add("Éditeur", 340)
+        lvEditeurs.Columns.Add("Part %", 100)
+        Me.Controls.Add(lvEditeurs)
 
-        ' Peupler avec valeurs existantes
+        ' TextBox flottant pour édition inline de la colonne Part %
+        _editTxt = New TextBox()
+        _editTxt.Visible = False
+        _editTxt.BorderStyle = BorderStyle.FixedSingle
+        Me.Controls.Add(_editTxt)
+        Me.Controls.SetChildIndex(_editTxt, 0) ' par-dessus la listview
+
+        ' ── Peupler depuis currentValue ───────────────────────────
         If Not String.IsNullOrEmpty(currentValue) Then
             For Each v As String In currentValue.Split(";"c)
                 Dim trimmed As String = v.Trim()
-                If Not String.IsNullOrEmpty(trimmed) Then lstEditeurs.Items.Add(trimmed)
+                If String.IsNullOrEmpty(trimmed) Then Continue For
+
+                ' Séparer Id/Nom et pct : le ":" sépare Id de pct SEULEMENT si la droite est numérique
+                Dim colonIdx As Integer = trimmed.LastIndexOf(":"c)
+                Dim idOuNom As String = trimmed
+                Dim pct As String = ""
+                If colonIdx > 0 Then
+                    Dim droite As String = trimmed.Substring(colonIdx + 1).Trim()
+                    Dim testPct As Double
+                    If Double.TryParse(droite, Globalization.NumberStyles.Any,
+                                       Globalization.CultureInfo.InvariantCulture, testPct) Then
+                        idOuNom = trimmed.Substring(0, colonIdx).Trim()
+                        pct = droite
+                    End If
+                End If
+
+                ' Résoudre Id → Designation pour affichage
+                Dim displayNom As String = idOuNom
+                If _dtMor.Columns.Contains("Id") AndAlso _dtMor.Columns.Contains("Designation") Then
+                    For Each mr As DataRow In _dtMor.Rows
+                        If mr("Id").ToString().Trim().ToUpper() = idOuNom.ToUpper() Then
+                            displayNom = mr("Designation").ToString().Trim()
+                            Exit For
+                        End If
+                    Next
+                End If
+
+                Dim lvi As New ListViewItem(displayNom)
+                lvi.SubItems.Add(pct)
+                lvi.Tag = idOuNom ' Id en Tag pour ValeurEditeurs
+                lvEditeurs.Items.Add(lvi)
             Next
         End If
-        ' Ajouter EAC comme option spéciale
-        If Not lstEditeurs.Items.Contains("EAC") Then lstEditeurs.Items.Insert(0, "EAC")
 
-        ' Zone d'ajout
+        ' ── Zone d'ajout ──────────────────────────────────────────
         Dim lblAjouter As New Label()
-        lblAjouter.Text = "Ajouter un éditeur :"
-        lblAjouter.Location = New Point(10, 220)
+        lblAjouter.Text = "Ajouter :"
+        lblAjouter.Location = New Point(10, 232)
         lblAjouter.AutoSize = True
         Me.Controls.Add(lblAjouter)
 
-        ' ComboBox alimentée par les morales
         Dim cbNouvel As New ComboBox()
-        cbNouvel.Location = New Point(10, 240)
-        cbNouvel.Size = New Size(310, 23)
+        cbNouvel.Location = New Point(10, 252)
+        cbNouvel.Size = New Size(280, 23)
         cbNouvel.DropDownStyle = ComboBoxStyle.DropDown
-        cbNouvel.Items.Add("EAC")
         For Each row As DataRow In _dtMor.Rows
-            Dim desig As String = row(0).ToString().Trim()
+            Dim desig As String = If(_dtMor.Columns.Contains("Designation"),
+                                     row("Designation").ToString().Trim(),
+                                     row(1).ToString().Trim())
             If Not String.IsNullOrEmpty(desig) Then cbNouvel.Items.Add(desig)
         Next
         Me.Controls.Add(cbNouvel)
 
+        Dim lblPct As New Label()
+        lblPct.Text = "%"
+        lblPct.Location = New Point(298, 255)
+        lblPct.AutoSize = True
+        Me.Controls.Add(lblPct)
+
+        Dim txtPct As New TextBox()
+        txtPct.Location = New Point(313, 252)
+        txtPct.Size = New Size(60, 23)
+        Me.Controls.Add(txtPct)
+
         Dim btnAjouter As New Button()
         btnAjouter.Text = "+ Ajouter"
-        btnAjouter.Location = New Point(330, 239)
-        btnAjouter.Size = New Size(90, 25)
+        btnAjouter.Location = New Point(383, 251)
+        btnAjouter.Size = New Size(92, 25)
         btnAjouter.BackColor = Color.FromArgb(16, 124, 16)
         btnAjouter.ForeColor = Color.White
         btnAjouter.FlatStyle = FlatStyle.Flat
@@ -913,17 +1043,25 @@ Public Class EditeurListForm
 
         Dim btnSupprimer As New Button()
         btnSupprimer.Text = "Supprimer"
-        btnSupprimer.Location = New Point(10, 275)
-        btnSupprimer.Size = New Size(90, 25)
+        btnSupprimer.Location = New Point(10, 290)
+        btnSupprimer.Size = New Size(100, 25)
         btnSupprimer.BackColor = Color.FromArgb(196, 43, 28)
         btnSupprimer.ForeColor = Color.White
         btnSupprimer.FlatStyle = FlatStyle.Flat
         Me.Controls.Add(btnSupprimer)
 
+        ' Label total
+        _lblTotal = New Label()
+        _lblTotal.Location = New Point(10, 325)
+        _lblTotal.Size = New Size(300, 20)
+        _lblTotal.Font = New Font(Me.Font, FontStyle.Bold)
+        _lblTotal.Text = "Total : 0 %"
+        Me.Controls.Add(_lblTotal)
+
         Dim btnOK As New Button()
         btnOK.Text = "OK"
-        btnOK.Location = New Point(240, 310)
-        btnOK.Size = New Size(85, 28)
+        btnOK.Location = New Point(270, 375)
+        btnOK.Size = New Size(90, 28)
         btnOK.BackColor = Color.FromArgb(0, 120, 212)
         btnOK.ForeColor = Color.White
         btnOK.FlatStyle = FlatStyle.Flat
@@ -931,30 +1069,142 @@ Public Class EditeurListForm
 
         Dim btnCancel As New Button()
         btnCancel.Text = "Annuler"
-        btnCancel.Location = New Point(335, 310)
-        btnCancel.Size = New Size(85, 28)
+        btnCancel.Location = New Point(370, 375)
+        btnCancel.Size = New Size(90, 28)
         btnCancel.DialogResult = DialogResult.Cancel
         Me.Controls.Add(btnCancel)
         Me.CancelButton = btnCancel
 
-        AddHandler btnAjouter.Click, Sub(s, ev)
-                                         Dim val As String = cbNouvel.Text.Trim()
-                                         If Not String.IsNullOrEmpty(val) AndAlso Not lstEditeurs.Items.Contains(val) Then
-                                             lstEditeurs.Items.Add(val)
-                                             cbNouvel.Text = ""
+        ' ── Handlers ─────────────────────────────────────────────
+
+        ' Double-clic sur colonne Part % → édition inline
+        AddHandler lvEditeurs.DoubleClick, Sub(s, ev)
+                                               CommiterEdition() ' fermer édition précédente si ouverte
+                                               Dim pt As Point = lvEditeurs.PointToClient(Cursor.Position)
+                                               Dim hitInfo = lvEditeurs.HitTest(pt)
+                                               If hitInfo.Item Is Nothing Then Return
+                                               ' Accepter clic sur la ligne entière (colonne 0 ou 1)
+                                               _editItem = hitInfo.Item
+                                               ' Positionner le TextBox sur la cellule Part % (SubItem 1)
+                                               Dim subBounds As Rectangle = _editItem.SubItems(1).Bounds
+                                               _editTxt.Bounds = New Rectangle(
+                                                   lvEditeurs.Left + subBounds.Left,
+                                                   lvEditeurs.Top + subBounds.Top,
+                                                   subBounds.Width, subBounds.Height)
+                                               _editTxt.Text = _editItem.SubItems(1).Text
+                                               _editTxt.Visible = True
+                                               _editTxt.Focus()
+                                               _editTxt.SelectAll()
+                                           End Sub
+
+        ' Entrée ou Tab → valider l'édition inline
+        AddHandler _editTxt.KeyDown, Sub(s, ev)
+                                         If ev.KeyCode = Keys.Return OrElse ev.KeyCode = Keys.Tab Then
+                                             CommiterEdition()
+                                             ev.SuppressKeyPress = True
+                                         ElseIf ev.KeyCode = Keys.Escape Then
+                                             _editTxt.Visible = False
+                                             _editItem = Nothing
                                          End If
                                      End Sub
 
+        AddHandler _editTxt.LostFocus, Sub(s, ev) CommiterEdition()
+
+        ' Ajouter un éditeur
+        AddHandler btnAjouter.Click, Sub(s, ev)
+                                         CommiterEdition()
+                                         Dim nomChoisi As String = cbNouvel.Text.Trim()
+                                         Dim pctStr As String = txtPct.Text.Trim()
+                                         If String.IsNullOrEmpty(nomChoisi) Then Return
+                                         For Each existing As ListViewItem In lvEditeurs.Items
+                                             If existing.Text.Equals(nomChoisi, StringComparison.OrdinalIgnoreCase) Then Return
+                                         Next
+                                         ' Résoudre Designation → Id
+                                         Dim storedId As String = nomChoisi
+                                         If _dtMor.Columns.Contains("Id") AndAlso _dtMor.Columns.Contains("Designation") Then
+                                             For Each mr As DataRow In _dtMor.Rows
+                                                 If mr("Designation").ToString().Trim().ToUpper() = nomChoisi.ToUpper() Then
+                                                     Dim fid As String = mr("Id").ToString().Trim()
+                                                     If Not String.IsNullOrEmpty(fid) Then storedId = fid
+                                                     Exit For
+                                                 End If
+                                             Next
+                                         End If
+                                         Dim lvi As New ListViewItem(nomChoisi)
+                                         lvi.SubItems.Add(pctStr)
+                                         lvi.Tag = storedId
+                                         lvEditeurs.Items.Add(lvi)
+                                         cbNouvel.Text = ""
+                                         txtPct.Text = ""
+                                         MettreAJourTotal()
+                                     End Sub
+
+        ' Supprimer
         AddHandler btnSupprimer.Click, Sub(s, ev)
-                                           If lstEditeurs.SelectedIndex >= 0 Then
-                                               lstEditeurs.Items.RemoveAt(lstEditeurs.SelectedIndex)
+                                           CommiterEdition()
+                                           If lvEditeurs.SelectedItems.Count > 0 Then
+                                               lvEditeurs.Items.Remove(lvEditeurs.SelectedItems(0))
+                                               MettreAJourTotal()
                                            End If
                                        End Sub
 
+        ' OK — valider total = 100
         AddHandler btnOK.Click, Sub(s, ev)
+                                    CommiterEdition()
+                                    Dim total As Double = 0
+                                    Dim tousRenseignes As Boolean = True
+                                    For Each lvi As ListViewItem In lvEditeurs.Items
+                                        Dim pctStr As String = lvi.SubItems(1).Text.Trim()
+                                        Dim pctVal As Double
+                                        If String.IsNullOrEmpty(pctStr) OrElse
+                                           Not Double.TryParse(pctStr, Globalization.NumberStyles.Any,
+                                                               Globalization.CultureInfo.InvariantCulture, pctVal) Then
+                                            tousRenseignes = False
+                                        Else
+                                            total += pctVal
+                                        End If
+                                    Next
+                                    If Not tousRenseignes Then
+                                        MessageBox.Show("Veuillez renseigner la part % de chaque éditeur.",
+                                                        "Parts manquantes", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                        Return
+                                    End If
+                                    If Math.Abs(total - 100.0) > 0.01 Then
+                                        MessageBox.Show("Le total des parts doit être égal à 100 % (actuellement : " &
+                                                        total.ToString("0.##") & " %).",
+                                                        "Total invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                        Return
+                                    End If
                                     Me.DialogResult = DialogResult.OK
                                     Me.Close()
                                 End Sub
+
+        MettreAJourTotal()
+    End Sub
+
+    ''' <summary>Valide et ferme le TextBox d'édition inline, met à jour l'item.</summary>
+    Private Sub CommiterEdition()
+        If _editTxt Is Nothing OrElse Not _editTxt.Visible OrElse _editItem Is Nothing Then Return
+        _editItem.SubItems(1).Text = _editTxt.Text.Trim()
+        _editTxt.Visible = False
+        _editItem = Nothing
+        MettreAJourTotal()
+    End Sub
+
+    ''' <summary>Recalcule et affiche le total des parts.</summary>
+    Private Sub MettreAJourTotal()
+        If _lblTotal Is Nothing Then Return
+        Dim total As Double = 0
+        For Each lvi As ListViewItem In lvEditeurs.Items
+            Dim pctVal As Double
+            If Double.TryParse(lvi.SubItems(1).Text.Trim(), Globalization.NumberStyles.Any,
+                               Globalization.CultureInfo.InvariantCulture, pctVal) Then
+                total += pctVal
+            End If
+        Next
+        _lblTotal.Text = "Total : " & total.ToString("0.##") & " %"
+        _lblTotal.ForeColor = If(Math.Abs(total - 100.0) <= 0.01 OrElse lvEditeurs.Items.Count = 0,
+                                 Color.FromArgb(16, 124, 16), Color.FromArgb(196, 43, 28))
     End Sub
 
 End Class
