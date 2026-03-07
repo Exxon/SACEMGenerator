@@ -23,6 +23,7 @@ Public Class MainForm
     Public Sub New()
         InitializeComponent()
         InitializePaths()
+        PersonnesForm.InitialiserBDD()
     End Sub
 
     ''' <summary>
@@ -500,19 +501,6 @@ Public Class MainForm
     ''' <summary>
     ''' Bouton "Effacer les logs"
     ''' </summary>
-    Private Sub btnEditJson_Click(sender As Object, e As EventArgs) Handles btnEditJson.Click
-        Dim editorPath As String = If(_currentJsonPath, "")
-        Using editor As New JsonEditorForm(editorPath)
-            editor.ShowDialog()
-            If Not String.IsNullOrEmpty(editor.SavedJsonPath) AndAlso
-               File.Exists(editor.SavedJsonPath) Then
-                _currentJsonPath = editor.SavedJsonPath
-                txtJsonPath.Text = _currentJsonPath
-                LoadAndValidateJson()
-            End If
-        End Using
-    End Sub
-
     Private Sub btnClearLog_Click(sender As Object, e As EventArgs) Handles btnClearLog.Click
         txtLog.Clear()
         txtLog.AppendText("=== SACEM GENERATOR - VB.NET ===" & vbCrLf)
@@ -553,18 +541,18 @@ Public Class MainForm
     ''' </summary>
     Private Sub InitializeComponent()
         Me.Text = "SACEM Generator - VB.NET"
-        Me.Size = New Size(900, 780)
+        Me.Size = New Size(900, 750)
         Me.StartPosition = FormStartPosition.CenterScreen
 
         ' GroupBox - Sélection JSON
         Dim grpJson As New GroupBox()
         grpJson.Text = "1. Sélection du fichier JSON"
         grpJson.Location = New Point(10, 10)
-        grpJson.Size = New Size(860, 155)
+        grpJson.Size = New Size(860, 130)
 
         txtJsonPath = New TextBox()
         txtJsonPath.Location = New Point(10, 25)
-        txtJsonPath.Size = New Size(700, 20)
+        txtJsonPath.Size = New Size(540, 20)
         txtJsonPath.ReadOnly = True
         grpJson.Controls.Add(txtJsonPath)
 
@@ -576,9 +564,9 @@ Public Class MainForm
 
         btnEditJson = New Button()
         btnEditJson.Text = "Créer / Éditer JSON"
-        btnEditJson.Location = New Point(720, 55)
-        btnEditJson.Size = New Size(120, 25)
-        btnEditJson.BackColor = Color.FromArgb(16, 124, 16)
+        btnEditJson.Location = New Point(560, 23)
+        btnEditJson.Size = New Size(150, 25)
+        btnEditJson.BackColor = Color.FromArgb(0, 120, 212)
         btnEditJson.ForeColor = Color.White
         btnEditJson.FlatStyle = FlatStyle.Flat
         grpJson.Controls.Add(btnEditJson)
@@ -643,12 +631,13 @@ Public Class MainForm
         lblPartsInedites.Text = "Parts inédites: 0"
         grpJson.Controls.Add(lblPartsInedites)
 
+        AddHandler btnEditJson.Click, AddressOf btnEditJson_Click
         Me.Controls.Add(grpJson)
 
         ' GroupBox - Configuration
         Dim grpConfig As New GroupBox()
         grpConfig.Text = "2. Configuration des chemins"
-        grpConfig.Location = New Point(10, 175)
+        grpConfig.Location = New Point(10, 150)
         grpConfig.Size = New Size(860, 100)
 
         Dim lblTemplates As New Label()
@@ -692,7 +681,7 @@ Public Class MainForm
         ' GroupBox - Génération
         Dim grpGeneration As New GroupBox()
         grpGeneration.Text = "3. Génération des documents"
-        grpGeneration.Location = New Point(10, 285)
+        grpGeneration.Location = New Point(10, 260)
         grpGeneration.Size = New Size(860, 80)
 
         btnGenerateBDO = New Button()
@@ -725,7 +714,7 @@ Public Class MainForm
         ' GroupBox - Logs
         Dim grpLogs As New GroupBox()
         grpLogs.Text = "4. Logs de génération"
-        grpLogs.Location = New Point(10, 375)
+        grpLogs.Location = New Point(10, 350)
         grpLogs.Size = New Size(860, 350)
 
         txtLog = New TextBox()
@@ -752,6 +741,7 @@ Public Class MainForm
     ' Contrôles du formulaire
     Private WithEvents txtJsonPath As TextBox
     Private WithEvents btnSelectJson As Button
+    Private WithEvents btnEditJson As Button
     Private WithEvents lblTitre As Label
     Private WithEvents lblInterprete As Label
     Private WithEvents lblAyantsDroit As Label
@@ -770,5 +760,16 @@ Public Class MainForm
     Private WithEvents btnOpenOutput As Button
     Private WithEvents txtLog As TextBox
     Private WithEvents btnClearLog As Button
-    Private WithEvents btnEditJson As Button
+    ''' <summary>Ouvre l'éditeur JSON SACEM.</summary>
+    Private Sub btnEditJson_Click(sender As Object, e As EventArgs)
+        Dim existingPath As String = txtJsonPath.Text.Trim()
+        Using f As New JsonEditorForm(If(File.Exists(existingPath), existingPath, ""))
+            f.ShowDialog()
+            If Not String.IsNullOrEmpty(f.SavedJsonPath) AndAlso File.Exists(f.SavedJsonPath) Then
+                txtJsonPath.Text = f.SavedJsonPath
+                btnSelectJson_Click(sender, e)
+            End If
+        End Using
+    End Sub
+
 End Class

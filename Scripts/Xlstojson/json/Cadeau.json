@@ -15,5 +15,90 @@
   "Faita": "",
   "Faitle": "05/03/2026",
   "Commentaire": "",
-  "AyantsDroit": []
+  "AyantsDroit": [
+    {
+      "Ref": "Saamou Sku",
+      "Type": "Physique",
+      "Role": "A",
+      "Lettrage": "A",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "Bellum Publishing",
+      "Type": "Moral",
+      "Role": "E",
+      "Lettrage": "A",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "TH RECORDS",
+      "Type": "Moral",
+      "Role": "E",
+      "Lettrage": "A",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "GENEZIO",
+      "Type": "Physique",
+      "Role": "A",
+      "Lettrage": "B",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "JOUUUE PUBLISHING",
+      "Type": "Moral",
+      "Role": "E",
+      "Lettrage": "B",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "Eliyel",
+      "Type": "Physique",
+      "Role": "C",
+      "Lettrage": "C",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    },
+    {
+      "Ref": "Warner Chapell Music France",
+      "Type": "Moral",
+      "Role": "E",
+      "Lettrage": "C",
+      "PH": "",
+      "DE": "",
+      "DR": "",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": "TRUE"
+    }
+  ]
 }

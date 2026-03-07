@@ -143,13 +143,14 @@ End Class
 ''' Informations BDO (Bulletin de Déclaration d'Œuvre)
 ''' </summary>
 Public Class BDO
-    Public Property Role As String ' "A", "C", "E", "AR", "AD"
-    Public Property COAD_IPI As String ' Numéro COAD ou IPI
-    Public Property PH As String ' Pourcentage
+    Public Property Id As String       ' Clé stable vers le xlsx : P00001 / M00001
+    Public Property Role As String     ' "A", "C", "E", "AR", "AD"
+    Public Property COAD_IPI As String ' IPI de la personne (enrichi depuis XLSX, non persisté en JSON)
+    Public Property PH As String       ' Pourcentage
     Public Property Lettrage As String
     Public Property Managelic As String
     Public Property Managesub As String
-    Public Property Signataire As Boolean = True  ' TRUE par défaut si absent du JSON
+    Public Property Signataire As Boolean
 End Class
 
 ''' <summary>

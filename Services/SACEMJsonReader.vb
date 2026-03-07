@@ -123,18 +123,23 @@ Public Class SACEMJsonReader
             ayant.Identite.FonctionRepresentant = GetStringValue(identiteObj, "FonctionRepresentant")
         End If
 
-        ' BDO
+        ' BDO - nouveau format (Id) + compatibilité ancien format (Ref/Type)
         If jObj("BDO") IsNot Nothing Then
             Dim bdoObj As JObject = CType(jObj("BDO"), JObject)
+            ayant.BDO.Id = GetStringValue(bdoObj, "Id")
             ayant.BDO.Role = GetStringValue(bdoObj, "Role")
-            ayant.BDO.COAD_IPI = GetStringValue(bdoObj, "COAD/IPI")
             ayant.BDO.PH = GetStringValue(bdoObj, "PH")
             ayant.BDO.Lettrage = GetStringValue(bdoObj, "Lettrage")
             ayant.BDO.Managelic = GetStringValue(bdoObj, "Managelic")
             ayant.BDO.Managesub = GetStringValue(bdoObj, "Managesub")
-            ' Signataire : TRUE par défaut si absent du JSON
-            Dim signataire As String = GetStringValue(bdoObj, "Signataire").Trim().ToUpper()
-            ayant.BDO.Signataire = (signataire <> "FALSE")
+        Else
+            ' Ancien format : Id = Ref au niveau racine
+            ayant.BDO.Id = GetStringValue(jObj, "Ref")
+            ayant.BDO.Role = GetStringValue(jObj, "Role")
+            ayant.BDO.PH = GetStringValue(jObj, "PH")
+            ayant.BDO.Lettrage = GetStringValue(jObj, "Lettrage")
+            ayant.BDO.Managelic = GetStringValue(jObj, "Managelic")
+            ayant.BDO.Managesub = GetStringValue(jObj, "Managesub")
         End If
 
         ' Adresse

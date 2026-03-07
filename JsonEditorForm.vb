@@ -280,6 +280,7 @@ Public Class JsonEditorForm
         AddHandler dgv.CellValidating, AddressOf Dgv_CellValidating
         AddHandler dgv.CellBeginEdit, AddressOf Dgv_CellBeginEdit
         AddHandler dgv.DataError, AddressOf Dgv_DataError
+        AddHandler dgv.CellDoubleClick, AddressOf Dgv_CellDoubleClick
         AddHandler mnuSupprimer.Click, AddressOf MnuSupprimer_Click
         AddHandler Me.Load, AddressOf JsonEditorForm_Load
     End Sub
@@ -296,6 +297,8 @@ Public Class JsonEditorForm
 
     Private Sub InitDataTable()
         DtDepotCreateur = New DataTable()
+        ' Clé stable vers le XLSX
+        DtDepotCreateur.Columns.Add("Id", GetType(String))
         ' Identité
         DtDepotCreateur.Columns.Add("Type", GetType(String))          ' "Physique" / "Moral"
         DtDepotCreateur.Columns.Add("Designation", GetType(String))
@@ -348,9 +351,9 @@ Public Class JsonEditorForm
         Next
 
         Dim visible As New Dictionary(Of String, Integer) From {
-            {"Designation", 250}, {"Role", 45}, {"Lettrage", 60},
+            {"Id", 70}, {"Designation", 250}, {"Role", 45}, {"Lettrage", 60},
             {"SocieteGestion", 90}, {"Signataire", 70}, {"COAD_IPI", 130},
-            {"PH", 60}, {"DE", 55}, {"DR", 55}
+            {"PH", 60}
         }
 
         For Each kvp In visible
@@ -496,75 +499,123 @@ Public Class JsonEditorForm
     End Sub
 
     ''' <summary>
-    ''' Met à jour les champs des ayants droit dans la grille
-    ''' à partir des fiches modifiées dans DtPersonPhy / DtPersonMor.
-    ''' Champs mis à jour : COAD_IPI, SocieteGestion, Nom, Prenom, adresse, contact.
+    ''' Synchronise TOUTES les colonnes de la grille depuis le XLSX (source de vérité).
+    ''' Physique : recherche par Nom+Prenom ou Pseudonyme.
+    ''' Morale   : recherche par Designation (insensible à la casse).
     ''' </summary>
     Private Sub SyncGridAvecSheet()
+        ' Mapping XLSX colonne → DtDepotCreateur colonne
+        ' Format : {colonne_xlsx, colonne_grille}
+        Dim mapPhy As (String, String)() = {
+            ("Pseudonyme", "Pseudonyme"),
+            ("Nom", "Nom"),
+            ("Prenom", "Prenom"),
+            ("Genre", "Genre"),
+            ("SocieteGestion", "SocieteGestion"),
+            ("Num de voie", "NumVoie"),
+            ("Type de voie", "TypeVoie"),
+            ("Nom de voie", "NomVoie"),
+            ("CP", "CP"),
+            ("Ville", "Ville"),
+            ("Mail", "Mail"),
+            ("Tel", "Tel"),
+            ("Date de naissance", "DateNaissance"),
+            ("Lieu de naissance", "LieuNaissance"),
+            ("N Secu", "NSecu")}
+
+        Dim mapMor As (String, String)() = {
+            ("Designation", "Designation"),
+            ("SocieteGestion", "SocieteGestion"),
+            ("Forme Juridique", "FormeJuridique"),
+            ("Capital", "Capital"),
+            ("RCS", "RCS"),
+            ("Siren", "Siren"),
+            ("Num de voie", "NumVoie"),
+            ("Type de voie", "TypeVoie"),
+            ("Nom de voie", "NomVoie"),
+            ("CP", "CP"),
+            ("Ville", "Ville"),
+            ("Mail", "Mail"),
+            ("Tel", "Tel"),
+            ("Prenom representant", "PrenomRepresentant"),
+            ("Nom representant", "NomRepresentant"),
+            ("Fonction representant", "FonctionRepresentant")}
+
         For Each gridRow As DataRow In DtDepotCreateur.Rows
             Dim tp As String = gridRow("Type").ToString()
-            Dim desig As String = gridRow("Designation").ToString().Trim()
+            Dim sheetRow As DataRow = Nothing
 
             If tp = "Physique" AndAlso DtPersonPhy IsNot Nothing Then
-                ' Chercher par Nom+Prenom ou Pseudonyme
-                Dim nom As String = gridRow("Nom").ToString().Trim()
-                Dim prenom As String = gridRow("Prenom").ToString().Trim()
-                Dim pseudo As String = gridRow("Pseudonyme").ToString().Trim()
-
-                Dim sheetRow As DataRow = Nothing
+                Dim nom As String = gridRow("Nom").ToString().Trim().ToUpper()
+                Dim prenom As String = gridRow("Prenom").ToString().Trim().ToUpper()
+                Dim pseudo As String = gridRow("Pseudonyme").ToString().Trim().ToUpper()
                 For Each r As DataRow In DtPersonPhy.Rows
-                    Dim rNom As String = SafeStr(r, "Nom").Trim()
-                    Dim rPrenom As String = SafeStr(r, "Prenom").Trim()
-                    Dim rPseudo As String = SafeStr(r, "Pseudonyme").Trim()
+                    Dim rNom As String = SafeStr(r, "Nom").Trim().ToUpper()
+                    Dim rPrenom As String = SafeStr(r, "Prenom").Trim().ToUpper()
+                    Dim rPseudo As String = SafeStr(r, "Pseudonyme").Trim().ToUpper()
                     If (Not String.IsNullOrEmpty(nom) AndAlso rNom = nom AndAlso rPrenom = prenom) OrElse
                        (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
-                        sheetRow = r
-                        Exit For
+                        sheetRow = r : Exit For
                     End If
                 Next
-
                 If sheetRow IsNot Nothing Then
-                    ' IPI / COAD
+                    ' Copier toutes les colonnes mappées
+                    For Each mapping As (String, String) In mapPhy
+                        Dim xlsCol As String = mapping.Item1
+                        Dim gridCol As String = mapping.Item2
+                        If DtDepotCreateur.Columns.Contains(gridCol) Then
+                            Dim val As String = SafeStr(sheetRow, xlsCol)
+                            gridRow(gridCol) = val
+                        End If
+                    Next
+                    ' COAD / IPI — format spécial "COAD : X" ou "IPI : X"
                     Dim coad As String = SafeStr(sheetRow, "COAD")
                     Dim ipi As String = SafeStr(sheetRow, "IPI")
                     If Not String.IsNullOrEmpty(coad) Then
                         gridRow("COAD_IPI") = "COAD : " & coad
                     ElseIf Not String.IsNullOrEmpty(ipi) Then
                         gridRow("COAD_IPI") = "IPI : " & ipi
+                    Else
+                        gridRow("COAD_IPI") = ""
                     End If
-                    ' Société de gestion
-                    Dim soc As String = SafeStr(sheetRow, "SocieteGestion", "SACEM")
-                    If Not String.IsNullOrEmpty(soc) Then gridRow("SocieteGestion") = soc
-                    ' Adresse / contact
-                    gridRow("Mail") = SafeStr(sheetRow, "Mail")
-                    gridRow("Tel") = SafeStr(sheetRow, "Tel")
-                    gridRow("NumVoie") = SafeStr(sheetRow, "Num de voie")
-                    gridRow("TypeVoie") = SafeStr(sheetRow, "Type de voie")
-                    gridRow("NomVoie") = SafeStr(sheetRow, "Nom de voie")
-                    gridRow("CP") = SafeStr(sheetRow, "CP")
-                    gridRow("Ville") = SafeStr(sheetRow, "Ville")
+                    ' Reconstruire Designation depuis le XLSX
+                    Dim nomXls As String = SafeStr(sheetRow, "Nom").Trim()
+                    Dim prenomXls As String = SafeStr(sheetRow, "Prenom").Trim()
+                    Dim pseudoXls As String = SafeStr(sheetRow, "Pseudonyme").Trim()
+                    If Not String.IsNullOrEmpty(pseudoXls) Then
+                        gridRow("Designation") = nomXls & " " & prenomXls & " / " & pseudoXls
+                    Else
+                        gridRow("Designation") = (nomXls & " " & prenomXls).Trim()
+                    End If
                 End If
 
             ElseIf tp = "Moral" AndAlso DtPersonMor IsNot Nothing Then
-                Dim sheetRow As DataRow = Nothing
+                Dim desigUp As String = gridRow("Designation").ToString().Trim().ToUpper()
                 For Each r As DataRow In DtPersonMor.Rows
-                    If SafeStr(r, "Designation").Trim() = desig Then
-                        sheetRow = r
-                        Exit For
+                    If SafeStr(r, "Designation").Trim().ToUpper() = desigUp Then
+                        sheetRow = r : Exit For
                     End If
                 Next
-
                 If sheetRow IsNot Nothing Then
+                    ' Copier toutes les colonnes mappées
+                    For Each mapping As (String, String) In mapMor
+                        Dim xlsCol As String = mapping.Item1
+                        Dim gridCol As String = mapping.Item2
+                        If DtDepotCreateur.Columns.Contains(gridCol) Then
+                            Dim val As String = SafeStr(sheetRow, xlsCol)
+                            gridRow(gridCol) = val
+                        End If
+                    Next
+                    ' COAD / IPI — format spécial
                     Dim coad As String = SafeStr(sheetRow, "COAD")
                     Dim ipi As String = SafeStr(sheetRow, "IPI")
                     If Not String.IsNullOrEmpty(coad) Then
                         gridRow("COAD_IPI") = "COAD : " & coad
                     ElseIf Not String.IsNullOrEmpty(ipi) Then
                         gridRow("COAD_IPI") = "IPI : " & ipi
+                    Else
+                        gridRow("COAD_IPI") = ""
                     End If
-                    gridRow("SocieteGestion") = SafeStr(sheetRow, "SocieteGestion", "SACEM")
-                    gridRow("Mail") = SafeStr(sheetRow, "Mail")
-                    gridRow("Tel") = SafeStr(sheetRow, "Tel")
                 End If
             End If
         Next
@@ -582,7 +633,7 @@ Public Class JsonEditorForm
             For Each row As DataRow In DtPersonPhy.Rows
                 Dim pseudo As String = SafeStr(row, "Pseudonyme")
                 Dim nom As String = SafeStr(row, "Nom")
-                Dim prenom As String = If(row.Table.Columns.Contains("Prénom"), SafeStr(row, "Prénom"), SafeStr(row, "Prenom"))
+                Dim prenom As String = SafeStr(row, "Prénom")
                 If Not String.IsNullOrEmpty(pseudo) OrElse Not String.IsNullOrEmpty(nom & prenom) Then
                     items.Add($"{pseudo} / {nom} / {prenom}")
                 End If
@@ -612,6 +663,9 @@ Public Class JsonEditorForm
             Return
         End If
 
+        ' Recharger le xlsx pour avoir les données les plus récentes
+        RafraichirBDD()
+
         If sel.StartsWith("(Morale) ") Then
             AjouterPersonneMorale(sel.Substring(9).Trim())
         Else
@@ -624,9 +678,22 @@ Public Class JsonEditorForm
         dgv.Refresh()
     End Sub
 
+    ''' <summary>Relit le xlsx depuis le disque pour avoir les données fraîches.</summary>
+    Private Sub RafraichirBDD()
+        Dim localPath As String = PersonnesForm.DefaultXlsxPath
+        If Not File.Exists(localPath) Then Return
+        Try
+            DtPersonPhy = LoadSheetXlsxLocal(localPath, "PERSONNEPHYSIQUE")
+            DtPersonMor = LoadSheetXlsxLocal(localPath, "PERSONNEMORALE")
+        Catch
+            ' Garder les données en mémoire si erreur
+        End Try
+    End Sub
+
     Private Sub AjouterPersonneMorale(designation As String)
         If DtPersonMor Is Nothing Then Return
-        Dim foundRow As DataRow = DtPersonMor.Select($"Designation = '{designation.Replace("'", "''")}'").FirstOrDefault()
+        Dim foundRow As DataRow = DtPersonMor.AsEnumerable().
+            FirstOrDefault(Function(r) SafeStr(r, "Designation").Trim().ToUpper() = designation.Trim().ToUpper())
         If foundRow Is Nothing Then Return
 
         If DtDepotCreateur.Rows.Count = 0 Then
@@ -661,8 +728,59 @@ Public Class JsonEditorForm
                 CopierAdresseContact(nr, foundRow)
                 CopierInfosMorale(nr, foundRow)
                 DtDepotCreateur.Rows.Add(nr)
+                ' Persistance : mettre à jour la colonne Editeur dans DtPersonPhy
+                MajEditeurDansXlsx(crea, designation)
             Next
         End Using
+    End Sub
+
+
+    Private Sub MajEditeurDansXlsx(creaDesignation As String, editeurDesignation As String)
+        If DtPersonPhy Is Nothing Then Return
+        Dim phyRow As DataRow = DtPersonPhy.AsEnumerable().FirstOrDefault(
+            Function(r)
+                Dim pseudo As String = SafeStr(r, "Pseudonyme").Trim()
+                Dim nom As String = SafeStr(r, "Nom").Trim()
+                Dim prenom As String = SafeStr(r, "Prenom").Trim()
+                Dim desig As String = If(Not String.IsNullOrEmpty(pseudo), pseudo, (nom & " " & prenom).Trim())
+                Return desig.ToUpper() = creaDesignation.Trim().ToUpper()
+            End Function)
+        If phyRow Is Nothing Then Return
+
+        Dim current As String = If(DtPersonPhy.Columns.Contains("Editeur"), SafeStr(phyRow, "Editeur"), "")
+        Dim editeurs As New List(Of String)(
+            current.Split(";"c).Select(Function(s) s.Trim()).Where(Function(s) Not String.IsNullOrEmpty(s)))
+        If Not editeurs.Any(Function(e) e.ToUpper() = editeurDesignation.Trim().ToUpper()) Then
+            editeurs.Add(editeurDesignation.Trim())
+            phyRow("Editeur") = String.Join(";", editeurs)
+            SauvegarderXlsxSilencieux()
+        End If
+    End Sub
+
+    Private Sub SauvegarderXlsxSilencieux()
+        Try
+            Dim localPath As String = PersonnesForm.DefaultXlsxPath
+            If Not File.Exists(localPath) Then Return
+            Using pkg As New ExcelPackage(New FileInfo(localPath))
+                Dim existing = pkg.Workbook.Worksheets("PERSONNEPHYSIQUE")
+                If existing IsNot Nothing Then pkg.Workbook.Worksheets.Delete(existing)
+                Dim ws = pkg.Workbook.Worksheets.Add("PERSONNEPHYSIQUE")
+                Dim cols As String() = PersonnesForm.ColsPhy
+                For c = 0 To cols.Length - 1
+                    ws.Cells(1, c + 1).Value = cols(c)
+                    ws.Cells(1, c + 1).Style.Font.Bold = True
+                Next
+                For r = 0 To DtPersonPhy.Rows.Count - 1
+                    For c = 0 To cols.Length - 1
+                        If DtPersonPhy.Columns.Contains(cols(c)) Then
+                            ws.Cells(r + 2, c + 1).Value = DtPersonPhy.Rows(r)(cols(c)).ToString()
+                        End If
+                    Next
+                Next
+                pkg.Save()
+            End Using
+        Catch
+        End Try
     End Sub
 
     Private Sub AjouterPersonnePhysique(selectedValue As String)
@@ -677,8 +795,7 @@ Public Class JsonEditorForm
         Dim foundRow As DataRow = Nothing
         For Each r As DataRow In DtPersonPhy.Rows
             Dim rNom As String = r("Nom").ToString().Trim()
-            Dim rPrenom As String = If(r.Table.Columns.Contains("Prénom"), r("Prénom").ToString().Trim(),
-                                       If(r.Table.Columns.Contains("Prenom"), r("Prenom").ToString().Trim(), ""))
+            Dim rPrenom As String = SafeStr(r, "Prénom").Trim()
             Dim rPseudo As String = r("Pseudonyme").ToString().Trim()
             If (rNom = nom AndAlso rPrenom = prenom) OrElse
                (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
@@ -690,7 +807,7 @@ Public Class JsonEditorForm
 
         ' Rôle
         Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing, cbGenre.SelectedItem.ToString(), cbGenre.Text)
-        Dim role As String = If(foundRow.Table.Columns.Contains("Rôle"), SafeStr(foundRow, "Rôle"), SafeStr(foundRow, "Role"))
+        Dim role As String = SafeStr(foundRow, "Rôle")
         role = AjusterRole(role, genre)
 
         If String.IsNullOrEmpty(role) Then
@@ -706,7 +823,7 @@ Public Class JsonEditorForm
         nr("Designation") = BuildDesignation(foundRow)
         nr("Pseudonyme") = SafeStr(foundRow, "Pseudonyme")
         nr("Nom") = SafeStr(foundRow, "Nom")
-        nr("Prenom") = If(foundRow.Table.Columns.Contains("Prénom"), SafeStr(foundRow, "Prénom"), SafeStr(foundRow, "Prenom"))
+        nr("Prenom") = SafeStr(foundRow, "Prénom")
         nr("Genre") = SafeStr(foundRow, "Genre")
         nr("SocieteGestion") = SafeStr(foundRow, "SocieteGestion", "SACEM")
         nr("Role") = role
@@ -719,57 +836,114 @@ Public Class JsonEditorForm
         DtDepotCreateur.Rows.Add(nr)
         nr("Lettrage") = GetNextLetter()
 
-        ' Éditeur par défaut
+        ' Éditeurs par défaut — format "M00001:60;M00002:40" ou "M00001;M00002"
         If Not String.IsNullOrEmpty(editeurDefaut) Then
-            AjouterEditeurParDefaut(editeurDefaut, nr)
+            ' Parser les entrées et extraire les parts explicites
+            Dim entrees() As String = editeurDefaut.Split(";"c)
+            Dim editeurIds As New List(Of String)()
+            Dim partsExplicites As New Dictionary(Of String, Double)()
+            For Each entree As String In entrees
+                Dim e As String = entree.Trim()
+                If String.IsNullOrEmpty(e) Then Continue For
+                Dim tokens() As String = e.Split(":"c)
+                Dim eid As String = tokens(0).Trim()
+                editeurIds.Add(eid)
+                If tokens.Length > 1 Then
+                    Dim p As Double
+                    If Double.TryParse(tokens(1).Trim(), p) Then
+                        partsExplicites(eid) = p
+                    End If
+                End If
+            Next
+
+            ' Si pas de parts explicites → répartition égale
+            Dim nbEds As Integer = editeurIds.Count
+            For Each eid As String In editeurIds
+                If Not partsExplicites.ContainsKey(eid) Then
+                    partsExplicites(eid) = Math.Round(100.0 / nbEds, 2)
+                End If
+            Next
+
+            ' Ajouter chaque éditeur avec sa part calculée
+            For Each eid As String In editeurIds
+                Dim quotePartCoed As Double = partsExplicites(eid) / 100.0
+                AjouterEditeurParDefaut(eid, nr, quotePartCoed)
+            Next
         Else
             ' Demander EAC si déjà un éditeur
             If DtDepotCreateur.AsEnumerable().Any(Function(r) r("Role").ToString() = "E") Then
                 If MessageBox.Show("Voulez-vous être Éditeur À Compte d'Auteur (EAC) ?",
                                    "EAC ?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
-                    Dim nrE As DataRow = DtDepotCreateur.NewRow()
-                    nrE("Type") = "Physique"
-                    nrE("Designation") = nr("Designation").ToString() & " (EAC)"
-                    nrE("Nom") = nr("Nom")
-                    nrE("Prenom") = nr("Prenom")
-                    nrE("Role") = "E"
-                    nrE("Lettrage") = nr("Lettrage")
-                    nrE("SocieteGestion") = nr("SocieteGestion")
-                    nrE("Signataire") = True
-                    CopierAdresseContact(nrE, foundRow)
-                    DtDepotCreateur.Rows.Add(nrE)
+                    Dim nrEAC As DataRow = DtDepotCreateur.NewRow()
+                    nrEAC("Type") = "Physique"
+                    nrEAC("Designation") = nr("Designation").ToString() & " (EAC)"
+                    nrEAC("Nom") = nr("Nom")
+                    nrEAC("Prenom") = nr("Prenom")
+                    nrEAC("Role") = "E"
+                    nrEAC("Lettrage") = nr("Lettrage")
+                    nrEAC("SocieteGestion") = nr("SocieteGestion")
+                    nrEAC("Signataire") = True
+                    CopierAdresseContact(nrEAC, foundRow)
+                    DtDepotCreateur.Rows.Add(nrEAC)
                 End If
             End If
         End If
     End Sub
 
-    Private Sub AjouterEditeurParDefaut(editeurDesig As String, creaRow As DataRow)
-        If editeurDesig = "EAC" Then
-            Dim nrE As DataRow = DtDepotCreateur.NewRow()
-            nrE("Type") = "Physique"
-            nrE("Designation") = creaRow("Designation").ToString() & " (EAC)"
-            nrE("Nom") = creaRow("Nom")
-            nrE("Prenom") = creaRow("Prenom")
-            nrE("Role") = "E"
-            nrE("Lettrage") = creaRow("Lettrage")
-            nrE("SocieteGestion") = creaRow("SocieteGestion")
-            nrE("Signataire") = True
-            DtDepotCreateur.Rows.Add(nrE)
-        Else
-            If DtPersonMor Is Nothing Then Return
-            Dim morRow As DataRow = DtPersonMor.Select($"Designation = '{editeurDesig.Replace("'", "''")}'").FirstOrDefault()
-            If morRow Is Nothing Then Return
-            Dim nrE As DataRow = DtDepotCreateur.NewRow()
-            nrE("Type") = "Moral"
-            nrE("Designation") = editeurDesig
-            nrE("Role") = "E"
-            nrE("Lettrage") = creaRow("Lettrage")
-            nrE("SocieteGestion") = SafeStr(morRow, "SocieteGestion", "SACEM")
-            nrE("Signataire") = True
-            CopierInfosMorale(nrE, morRow)
-            CopierAdresseContact(nrE, morRow)
-            DtDepotCreateur.Rows.Add(nrE)
+    ''' <summary>
+    ''' Ajoute un éditeur lié à un AC dans la grille.
+    ''' quotePartCoed = fraction de la part AC attribuée à cet éditeur (ex: 0.6 pour 60%).
+    ''' PH de l'éditeur = PH de l'AC * quotePartCoed.
+    ''' </summary>
+    Private Sub AjouterEditeurParDefaut(editeurId As String, creaRow As DataRow,
+                                        Optional quotePartCoed As Double = 1.0)
+        ' Calculer PH éditeur = PH AC * quote-part coéditeur
+        Dim phAC As Double = 0
+        Double.TryParse(creaRow("PH").ToString(), phAC)
+        Dim phEditeur As Double = Math.Round(phAC * quotePartCoed, 2)
+        Dim phStr As String = If(phEditeur > 0, phEditeur.ToString("0.##"), "")
+
+        If editeurId = "EAC" Then
+            Dim nrEAC2 As DataRow = DtDepotCreateur.NewRow()
+            nrEAC2("Type") = "Physique"
+            nrEAC2("Designation") = creaRow("Designation").ToString() & " (EAC)"
+            nrEAC2("Nom") = creaRow("Nom")
+            nrEAC2("Prenom") = creaRow("Prenom")
+            nrEAC2("Role") = "E"
+            nrEAC2("Lettrage") = creaRow("Lettrage")
+            nrEAC2("PH") = phStr
+            nrEAC2("SocieteGestion") = creaRow("SocieteGestion")
+            nrEAC2("Signataire") = True
+            DtDepotCreateur.Rows.Add(nrEAC2)
+            Return
         End If
+
+        ' Recherche par Id (format M00001) puis fallback Designation
+        Dim morRow As DataRow = Nothing
+        If DtPersonMor IsNot Nothing Then
+            If editeurId.StartsWith("M") AndAlso DtPersonMor.Columns.Contains("Id") Then
+                morRow = DtPersonMor.AsEnumerable().FirstOrDefault(
+                    Function(r) SafeStr(r, "Id").Trim().ToUpper() = editeurId.Trim().ToUpper())
+            End If
+            If morRow Is Nothing Then
+                morRow = DtPersonMor.AsEnumerable().FirstOrDefault(
+                    Function(r) r("Designation").ToString().Trim().ToUpper() = editeurId.Trim().ToUpper())
+            End If
+        End If
+        If morRow Is Nothing Then Return
+
+        Dim nrEMor As DataRow = DtDepotCreateur.NewRow()
+        nrEMor("Type") = "Moral"
+        nrEMor("Designation") = SafeStr(morRow, "Designation")
+        nrEMor("Id") = SafeStr(morRow, "Id")
+        nrEMor("Role") = "E"
+        nrEMor("Lettrage") = creaRow("Lettrage")
+        nrEMor("PH") = phStr
+        nrEMor("SocieteGestion") = SafeStr(morRow, "SocieteGestion", "SACEM")
+        nrEMor("Signataire") = True
+        CopierInfosMorale(nrEMor, morRow)
+        CopierAdresseContact(nrEMor, morRow)
+        DtDepotCreateur.Rows.Add(nrEMor)
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -830,7 +1004,7 @@ Public Class JsonEditorForm
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
-    ' SAUVEGARDE JSON — FORMAT SACEMJsonReader
+    ' SAUVEGARDE JSON — FORMAT ALLÉGÉ (Ref + BDO uniquement)
     ' ─────────────────────────────────────────────────────────────
     Private Sub BtnSauvegarder_Click(sender As Object, e As EventArgs)
         SaveToJson()
@@ -846,7 +1020,6 @@ Public Class JsonEditorForm
             sfd.Title = "Enregistrer le fichier JSON SACEM"
             sfd.Filter = "Fichiers JSON (*.json)|*.json"
             sfd.FileName = CleanFileName(txtTitre.Text.Trim()) & ".json"
-
             If sfd.ShowDialog() <> DialogResult.OK Then Return
 
             Dim obj As New JObject()
@@ -870,64 +1043,17 @@ Public Class JsonEditorForm
             Dim arr As New JArray()
             For Each row As DataRow In DtDepotCreateur.Rows
                 Dim ad As New JObject()
-
-                ' Identite
-                Dim ident As New JObject()
                 Dim tp As String = row("Type").ToString()
-                ident("Type") = tp
 
-                If tp = "Moral" Then
-                    ident("Designation") = row("Designation").ToString()
-                    ident("SocieteGestion") = row("SocieteGestion").ToString()
-                    ident("FormeJuridique") = row("FormeJuridique").ToString()
-                    ident("Capital") = row("Capital").ToString()
-                    ident("RCS") = row("RCS").ToString()
-                    ident("Siren") = row("Siren").ToString()
-                    ident("GenreRepresentant") = row("GenreRepresentant").ToString()
-                    ident("PrenomRepresentant") = row("PrenomRepresentant").ToString()
-                    ident("NomRepresentant") = row("NomRepresentant").ToString()
-                    ident("FonctionRepresentant") = row("FonctionRepresentant").ToString()
-                Else
-                    ident("SocieteGestion") = row("SocieteGestion").ToString()
-                    ident("Pseudonyme") = row("Pseudonyme").ToString()
-                    ident("Nom") = row("Nom").ToString()
-                    ident("Prenom") = row("Prenom").ToString()
-                    ident("Genre") = row("Genre").ToString()
-                    ident("Nele") = row("Nele").ToString()
-                    ident("Nea") = row("Nea").ToString()
-                End If
-                ad("Identite") = ident
-
-                ' BDO
-                Dim bdo As New JObject()
-                bdo("Role") = row("Role").ToString()
-                bdo("Lettrage") = row("Lettrage").ToString()
-                bdo("COAD/IPI") = row("COAD_IPI").ToString()
-                bdo("PH") = row("PH").ToString()
-                bdo("Managelic") = row("Managelic").ToString()
-                bdo("Managesub") = row("Managesub").ToString()
-                bdo("DE") = row("DE").ToString()
-                bdo("DR") = row("DR").ToString()
+                ad("Id") = row("Id").ToString().Trim()
+                ad("Role") = row("Role").ToString()
+                ad("Lettrage") = row("Lettrage").ToString()
+                ad("PH") = row("PH").ToString()
+                ad("Managelic") = row("Managelic").ToString()
+                ad("Managesub") = row("Managesub").ToString()
                 Dim sig As Boolean = True
                 Boolean.TryParse(row("Signataire").ToString(), sig)
-                bdo("Signataire") = sig.ToString().ToUpper()
-                ad("BDO") = bdo
-
-                ' Adresse
-                Dim adr As New JObject()
-                adr("NumVoie") = row("NumVoie").ToString()
-                adr("TypeVoie") = row("TypeVoie").ToString()
-                adr("NomVoie") = row("NomVoie").ToString()
-                adr("CP") = row("CP").ToString()
-                adr("Ville") = row("Ville").ToString()
-                adr("Pays") = row("Pays").ToString()
-                ad("Adresse") = adr
-
-                ' Contact
-                Dim contact As New JObject()
-                contact("Mail") = row("Mail").ToString()
-                contact("Tel") = row("Tel").ToString()
-                ad("Contact") = contact
+                ad("Signataire") = sig
 
                 arr.Add(ad)
             Next
@@ -937,8 +1063,8 @@ Public Class JsonEditorForm
             File.WriteAllText(sfd.FileName, obj.ToString(Newtonsoft.Json.Formatting.Indented),
                               System.Text.Encoding.UTF8)
             SavedJsonPath = sfd.FileName
-            lblStatut.Text = $"JSON sauvegardé : {sfd.FileName}"
-            MessageBox.Show($"JSON sauvegardé avec succès !{vbCrLf}{sfd.FileName}",
+            lblStatut.Text = "JSON sauvegardé : " & sfd.FileName
+            MessageBox.Show("JSON sauvegardé avec succès !" & vbCrLf & sfd.FileName,
                             "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information)
         End Using
     End Sub
@@ -959,14 +1085,17 @@ Public Class JsonEditorForm
 
     Private Sub LoadJsonData(filePath As String)
         Try
-            Dim jsonContent As String = File.ReadAllText(filePath)
-            Dim obj As JObject = JObject.Parse(jsonContent)
+            ' Utiliser SACEMJsonReader pour charger et enrichir depuis xlsx
+            Dim sacemData As SACEMData = SACEMJsonReader.LoadFromFile(filePath)
 
+            ' Champs de l'oeuvre
+            Dim obj As JObject = sacemData.RawData
             txtTitre.Text = If(obj("Titre") IsNot Nothing, obj("Titre").ToString(), "")
             txtSousTitre.Text = If(obj("SousTitre") IsNot Nothing, obj("SousTitre").ToString(), "")
             txtInterprete.Text = If(obj("Interprete") IsNot Nothing, obj("Interprete").ToString(), "")
             txtDuree.Text = If(obj("Duree") IsNot Nothing, obj("Duree").ToString(), "")
-            If cbGenre.Items.Contains(If(obj("Genre") IsNot Nothing, If(obj("Genre") IsNot Nothing, obj("Genre").ToString(), ""), "")) Then cbGenre.Text = If(obj("Genre") IsNot Nothing, obj("Genre").ToString(), "")
+            Dim genre As String = If(obj("Genre") IsNot Nothing, obj("Genre").ToString(), "")
+            If cbGenre.Items.Contains(genre) Then cbGenre.SelectedItem = genre Else cbGenre.Text = genre
             Dim d As DateTime
             If DateTime.TryParseExact(If(obj("Date") IsNot Nothing, obj("Date").ToString(), ""), "dd/MM/yyyy",
                                       Globalization.CultureInfo.InvariantCulture,
@@ -983,77 +1112,131 @@ Public Class JsonEditorForm
                                       Globalization.DateTimeStyles.None, d) Then dtFaitle.Value = d
             cbInegalitaire.Checked = (If(obj("Inegalitaire") IsNot Nothing, obj("Inegalitaire").ToString().ToUpper(), "") = "TRUE")
 
+            ' Ayants droit — BDO conservé depuis JSON, identité/adresse/contact réenrichis depuis XLSX
+            RafraichirBDD()
             DtDepotCreateur.Rows.Clear()
-
-            Dim ayants As JArray = TryCast(obj("AyantsDroit"), JArray)
-            If ayants Is Nothing Then Return
-
-            For Each ad As JObject In ayants
+            For Each ayant As AyantDroit In sacemData.AyantsDroit
                 Dim nr As DataRow = DtDepotCreateur.NewRow()
-                Dim ident As JObject = TryCast(ad("Identite"), JObject)
-                Dim bdo As JObject = TryCast(ad("BDO"), JObject)
-                Dim adr As JObject = TryCast(ad("Adresse"), JObject)
-                Dim contact As JObject = TryCast(ad("Contact"), JObject)
+                nr("Type") = ayant.Identite.Type
 
-                If ident IsNot Nothing Then
-                    nr("Type") = If(ident("Type") IsNot Nothing, ident("Type").ToString(), "Physique")
-                    Dim desigVal As String = If(ident("Designation") IsNot Nothing, ident("Designation").ToString(), "")
-                    If String.IsNullOrEmpty(desigVal) Then
-                        Dim prenomVal As String = If(ident("Prenom") IsNot Nothing, ident("Prenom").ToString(), "")
-                        Dim nomVal As String = If(ident("Nom") IsNot Nothing, ident("Nom").ToString(), "")
-                        desigVal = (prenomVal & " " & nomVal).Trim()
+                ' BDO depuis JSON (propre au dépôt — ne jamais écraser)
+                nr("Id") = ayant.BDO.Id
+                nr("Role") = ayant.BDO.Role
+                nr("Lettrage") = ayant.BDO.Lettrage
+                nr("PH") = ayant.BDO.PH
+                nr("Managelic") = ayant.BDO.Managelic
+                nr("Managesub") = ayant.BDO.Managesub
+                nr("Signataire") = ayant.BDO.Signataire
+
+                ' Identité depuis JSON (fallback si non trouvé dans XLSX)
+                Dim desigJson As String = If(Not String.IsNullOrEmpty(ayant.Identite.Designation),
+                                             ayant.Identite.Designation,
+                                             (ayant.Identite.Prenom & " " & ayant.Identite.Nom).Trim())
+                nr("Designation") = desigJson
+                nr("Pseudonyme") = ayant.Identite.Pseudonyme
+                nr("Nom") = ayant.Identite.Nom
+                nr("Prenom") = ayant.Identite.Prenom
+                nr("Genre") = ayant.Identite.Genre
+                nr("SocieteGestion") = If(String.IsNullOrEmpty(ayant.Identite.SocieteGestion), "SACEM", ayant.Identite.SocieteGestion)
+                nr("FormeJuridique") = ayant.Identite.FormeJuridique
+                nr("Capital") = ayant.Identite.Capital
+                nr("RCS") = ayant.Identite.RCS
+                nr("Siren") = ayant.Identite.Siren
+                nr("PrenomRepresentant") = ayant.Identite.PrenomRepresentant
+                nr("NomRepresentant") = ayant.Identite.NomRepresentant
+                nr("GenreRepresentant") = ayant.Identite.GenreRepresentant
+                nr("FonctionRepresentant") = ayant.Identite.FonctionRepresentant
+                nr("Nele") = ayant.Identite.Nele
+                nr("Nea") = ayant.Identite.Nea
+                nr("NumVoie") = ayant.Adresse.NumVoie
+                nr("TypeVoie") = ayant.Adresse.TypeVoie
+                nr("NomVoie") = ayant.Adresse.NomVoie
+                nr("CP") = ayant.Adresse.CP
+                nr("Ville") = ayant.Adresse.Ville
+                nr("Pays") = ayant.Adresse.Pays
+                nr("Mail") = ayant.Contact.Mail
+                nr("Tel") = ayant.Contact.Tel
+
+                ' Réenrichissement depuis XLSX si disponible
+                Dim idJson As String = ayant.BDO.Id
+                If ayant.Identite.Type = "Physique" AndAlso DtPersonPhy IsNot Nothing Then
+                    ' Recherche par Id (stable) puis fallback par nom (compatibilité anciens JSON)
+                    Dim phyRow As DataRow = Nothing
+                    If Not String.IsNullOrEmpty(idJson) AndAlso DtPersonPhy.Columns.Contains("Id") Then
+                        phyRow = DtPersonPhy.AsEnumerable().FirstOrDefault(
+                            Function(r) SafeStr(r, "Id").Trim().ToUpper() = idJson.Trim().ToUpper())
                     End If
-                    nr("Designation") = desigVal
-                    nr("SocieteGestion") = If(ident("SocieteGestion") IsNot Nothing, ident("SocieteGestion").ToString(), "SACEM")
-                    nr("Pseudonyme") = If(ident("Pseudonyme") IsNot Nothing, ident("Pseudonyme").ToString(), "")
-                    nr("Nom") = If(ident("Nom") IsNot Nothing, ident("Nom").ToString(), "")
-                    nr("Prenom") = If(ident("Prenom") IsNot Nothing, ident("Prenom").ToString(), "")
-                    nr("Genre") = If(ident("Genre") IsNot Nothing, ident("Genre").ToString(), "")
-                    nr("FormeJuridique") = If(ident("FormeJuridique") IsNot Nothing, ident("FormeJuridique").ToString(), "")
-                    nr("Capital") = If(ident("Capital") IsNot Nothing, ident("Capital").ToString(), "")
-                    nr("RCS") = If(ident("RCS") IsNot Nothing, ident("RCS").ToString(), "")
-                    nr("Siren") = If(ident("Siren") IsNot Nothing, ident("Siren").ToString(), "")
-                    nr("PrenomRepresentant") = If(ident("PrenomRepresentant") IsNot Nothing, ident("PrenomRepresentant").ToString(), "")
-                    nr("NomRepresentant") = If(ident("NomRepresentant") IsNot Nothing, ident("NomRepresentant").ToString(), "")
-                    nr("GenreRepresentant") = If(ident("GenreRepresentant") IsNot Nothing, ident("GenreRepresentant").ToString(), "")
-                    nr("FonctionRepresentant") = If(ident("FonctionRepresentant") IsNot Nothing, ident("FonctionRepresentant").ToString(), "")
-                End If
-
-                If bdo IsNot Nothing Then
-                    nr("Role") = If(bdo("Role") IsNot Nothing, bdo("Role").ToString(), "")
-                    nr("Lettrage") = If(bdo("Lettrage") IsNot Nothing, bdo("Lettrage").ToString(), "")
-                    nr("COAD_IPI") = If(bdo("COAD/IPI") IsNot Nothing, bdo("COAD/IPI").ToString(), "")
-                    nr("PH") = If(bdo("PH") IsNot Nothing, bdo("PH").ToString(), "")
-                    nr("Managelic") = If(bdo("Managelic") IsNot Nothing, bdo("Managelic").ToString(), "")
-                    nr("Managesub") = If(bdo("Managesub") IsNot Nothing, bdo("Managesub").ToString(), "")
-                    nr("DE") = If(bdo("DE") IsNot Nothing, bdo("DE").ToString(), "")
-                    nr("DR") = If(bdo("DR") IsNot Nothing, bdo("DR").ToString(), "")
-                    Dim sigStr As String = If(bdo("Signataire") IsNot Nothing, bdo("Signataire").ToString().ToUpper(), "TRUE")
-                    nr("Signataire") = (sigStr <> "FALSE")
-                End If
-
-                If adr IsNot Nothing Then
-                    nr("NumVoie") = If(adr("NumVoie") IsNot Nothing, adr("NumVoie").ToString(), "")
-                    nr("TypeVoie") = If(adr("TypeVoie") IsNot Nothing, adr("TypeVoie").ToString(), "")
-                    nr("NomVoie") = If(adr("NomVoie") IsNot Nothing, adr("NomVoie").ToString(), "")
-                    nr("CP") = If(adr("CP") IsNot Nothing, adr("CP").ToString(), "")
-                    nr("Ville") = If(adr("Ville") IsNot Nothing, adr("Ville").ToString(), "")
-                    nr("Pays") = If(adr("Pays") IsNot Nothing, adr("Pays").ToString(), "")
-                End If
-
-                If contact IsNot Nothing Then
-                    nr("Mail") = If(contact("Mail") IsNot Nothing, contact("Mail").ToString(), "")
-                    nr("Tel") = If(contact("Tel") IsNot Nothing, contact("Tel").ToString(), "")
+                    If phyRow Is Nothing Then
+                        ' Fallback nom pour anciens JSON sans Id
+                        phyRow = DtPersonPhy.AsEnumerable().FirstOrDefault(
+                            Function(r)
+                                Dim pseudo As String = SafeStr(r, "Pseudonyme").Trim().ToUpper()
+                                Dim nomPrenom As String = (SafeStr(r, "Nom") & " " & SafeStr(r, "Prenom")).Trim().ToUpper()
+                                Dim prenomNom As String = (SafeStr(r, "Prenom") & " " & SafeStr(r, "Nom")).Trim().ToUpper()
+                                Dim target As String = desigJson.ToUpper()
+                                Return pseudo = target OrElse nomPrenom = target OrElse prenomNom = target
+                            End Function)
+                    End If
+                    ' Marquer si Id inconnu (personne supprimée ou non encore dans XLSX)
+                    nr("_Orphelin") = (phyRow Is Nothing AndAlso Not String.IsNullOrEmpty(idJson))
+                    If phyRow IsNot Nothing Then
+                        ' Réenrichir adresse, contact, identité civile
+                        nr("Pseudonyme") = SafeStr(phyRow, "Pseudonyme")
+                        nr("Nom") = SafeStr(phyRow, "Nom")
+                        nr("Prenom") = SafeStr(phyRow, "Prenom")
+                        nr("Genre") = SafeStr(phyRow, "Genre")
+                        nr("Nele") = SafeStr(phyRow, "Date de naissance")
+                        nr("Nea") = SafeStr(phyRow, "Lieu de naissance")
+                        nr("NumVoie") = SafeStr(phyRow, "Num de voie")
+                        nr("TypeVoie") = SafeStr(phyRow, "Type de voie")
+                        nr("NomVoie") = SafeStr(phyRow, "Nom de voie")
+                        nr("CP") = SafeStr(phyRow, "CP")
+                        nr("Ville") = SafeStr(phyRow, "Ville")
+                        nr("Mail") = SafeStr(phyRow, "Mail")
+                        nr("Tel") = SafeStr(phyRow, "Tel")
+                        nr("COAD_IPI") = GetCOADIPI(phyRow)
+                        ' Recalculer Designation avec les données fraîches
+                        nr("Designation") = BuildDesignation(phyRow)
+                    End If
+                ElseIf ayant.Identite.Type = "Moral" AndAlso DtPersonMor IsNot Nothing Then
+                    Dim morRow As DataRow = Nothing
+                    If Not String.IsNullOrEmpty(idJson) AndAlso DtPersonMor.Columns.Contains("Id") Then
+                        morRow = DtPersonMor.AsEnumerable().FirstOrDefault(
+                            Function(r) SafeStr(r, "Id").Trim().ToUpper() = idJson.Trim().ToUpper())
+                    End If
+                    If morRow Is Nothing Then
+                        morRow = DtPersonMor.AsEnumerable().FirstOrDefault(
+                            Function(r) SafeStr(r, "Designation").Trim().ToUpper() = desigJson.ToUpper())
+                    End If
+                    nr("_Orphelin") = (morRow Is Nothing AndAlso Not String.IsNullOrEmpty(idJson))
+                    If morRow IsNot Nothing Then
+                        ' Réenrichir infos légales et contact
+                        nr("FormeJuridique") = SafeStr(morRow, "Forme Juridique")
+                        nr("Capital") = SafeStr(morRow, "Capital")
+                        nr("RCS") = SafeStr(morRow, "RCS")
+                        nr("Siren") = SafeStr(morRow, "Siren")
+                        nr("PrenomRepresentant") = SafeStr(morRow, "Prenom representant")
+                        nr("NomRepresentant") = SafeStr(morRow, "Nom representant")
+                        nr("FonctionRepresentant") = SafeStr(morRow, "Fonction representant")
+                        nr("NumVoie") = SafeStr(morRow, "Num de voie")
+                        nr("TypeVoie") = SafeStr(morRow, "Type de voie")
+                        nr("NomVoie") = SafeStr(morRow, "Nom de voie")
+                        nr("CP") = SafeStr(morRow, "CP")
+                        nr("Ville") = SafeStr(morRow, "Ville")
+                        nr("Mail") = SafeStr(morRow, "Mail")
+                        nr("Tel") = SafeStr(morRow, "Tel")
+                        nr("COAD_IPI") = GetCOADIPI(morRow)
+                    End If
                 End If
 
                 DtDepotCreateur.Rows.Add(nr)
             Next
 
             dgv.Refresh()
-            lblStatut.Text = $"JSON chargé : {Path.GetFileName(filePath)}"
+            lblStatut.Text = "JSON chargé : " & Path.GetFileName(filePath) & " — données enrichies depuis BDD"
             RefreshDeclarationFormat()
         Catch ex As Exception
-            MessageBox.Show($"Erreur chargement JSON : {ex.Message}", "Erreur",
+            MessageBox.Show("Erreur chargement JSON : " & ex.Message, "Erreur",
                             MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
@@ -1213,28 +1396,59 @@ Public Class JsonEditorForm
             Dim dataRow As DataRow = DirectCast(row.DataBoundItem, DataRowView).Row
             Dim mail As String = dataRow("Mail").ToString().Trim()
             Dim desig As String = dataRow("Designation").ToString().Trim()
+            Dim orphelin As Boolean = False
+            If dataRow.Table.Columns.Contains("_Orphelin") Then
+                Boolean.TryParse(dataRow("_Orphelin").ToString(), orphelin)
+            End If
 
-            If String.IsNullOrEmpty(desig) Then
+            If orphelin Then
+                ' Id du JSON introuvable dans le XLSX (personne supprimée ou BDD absente)
+                row.DefaultCellStyle.BackColor = Color.DarkOrange
+                row.DefaultCellStyle.ForeColor = Color.White
+                row.DefaultCellStyle.Font = New Font(dgv.Font, FontStyle.Italic)
+            ElseIf String.IsNullOrEmpty(desig) Then
                 row.DefaultCellStyle.BackColor = Color.Black
                 row.DefaultCellStyle.ForeColor = Color.White
+                row.DefaultCellStyle.Font = dgv.Font
             ElseIf String.IsNullOrEmpty(mail) Then
                 row.DefaultCellStyle.BackColor = Color.OrangeRed
                 row.DefaultCellStyle.ForeColor = Color.White
+                row.DefaultCellStyle.Font = dgv.Font
             ElseIf Not String.IsNullOrEmpty(dataRow("CP").ToString()) Then
                 row.DefaultCellStyle.BackColor = Color.LightGreen
                 row.DefaultCellStyle.ForeColor = Color.Black
+                row.DefaultCellStyle.Font = dgv.Font
             Else
                 row.DefaultCellStyle.BackColor = Color.LightYellow
                 row.DefaultCellStyle.ForeColor = Color.Black
+                row.DefaultCellStyle.Font = dgv.Font
             End If
         Next
     End Sub
 
     Private Function SafeStr(row As DataRow, colName As String, Optional defVal As String = "") As String
+        ' Cherche d'abord le nom exact, puis la variante normalisée
         If row.Table.Columns.Contains(colName) AndAlso Not IsDBNull(row(colName)) Then
             Return row(colName).ToString()
         End If
+        ' Fallback : chercher colonne avec nom normalisé (sans accents)
+        Dim colNorm As String = NormalizeCol(colName)
+        For Each col As DataColumn In row.Table.Columns
+            If NormalizeCol(col.ColumnName) = colNorm Then
+                If Not IsDBNull(row(col)) Then Return row(col).ToString()
+                Return defVal
+            End If
+        Next
         Return defVal
+    End Function
+
+    Private Function NormalizeCol(s As String) As String
+        s = s.ToLower().Trim()
+        s = s.Replace("é", "e").Replace("è", "e").Replace("ê", "e")
+        s = s.Replace("à", "a").Replace("â", "a")
+        s = s.Replace("ô", "o").Replace("î", "i").Replace("û", "u")
+        s = s.Replace("ç", "c").Replace("°", "").Replace("ô", "o")
+        Return s
     End Function
 
     Private Function GetCOADIPI(row As DataRow) As String
@@ -1247,7 +1461,7 @@ Public Class JsonEditorForm
 
     Private Function BuildDesignation(row As DataRow) As String
         Dim nom As String = SafeStr(row, "Nom")
-        Dim prenom As String = If(row.Table.Columns.Contains("Prénom"), SafeStr(row, "Prénom"), SafeStr(row, "Prenom"))
+        Dim prenom As String = SafeStr(row, "Prénom")
         Dim pseudo As String = SafeStr(row, "Pseudonyme")
         Return $"{nom} {prenom}".Trim() & If(String.IsNullOrEmpty(pseudo), "", $" / {pseudo}")
     End Function
@@ -1260,7 +1474,7 @@ Public Class JsonEditorForm
         dest("Ville") = SafeStr(source, "Ville")
         dest("Pays") = SafeStr(source, "Pays", "FRANCE")
         dest("Mail") = SafeStr(source, "Mail")
-        dest("Tel") = If(source.Table.Columns.Contains("Tél"), SafeStr(source, "Tél"), SafeStr(source, "Tel"))
+        dest("Tel") = SafeStr(source, "Tél")
     End Sub
 
     Private Sub CopierInfosMorale(dest As DataRow, source As DataRow)
@@ -1269,9 +1483,17 @@ Public Class JsonEditorForm
         dest("RCS") = SafeStr(source, "RCS")
         dest("Siren") = SafeStr(source, "Siren")
         dest("GenreRepresentant") = SafeStr(source, "Genre representant")
-        dest("PrenomRepresentant") = SafeStr(source, "Prénom representant")
+        dest("PrenomRepresentant") = SafeStr(source, "Prenom representant")
         dest("NomRepresentant") = SafeStr(source, "Nom representant")
         dest("FonctionRepresentant") = SafeStr(source, "Fonction representant")
+        ' COAD / IPI
+        Dim coad As String = SafeStr(source, "COAD")
+        Dim ipi As String = SafeStr(source, "IPI")
+        If Not String.IsNullOrEmpty(coad) Then
+            dest("COAD_IPI") = "COAD : " & coad
+        ElseIf Not String.IsNullOrEmpty(ipi) Then
+            dest("COAD_IPI") = "IPI : " & ipi
+        End If
     End Sub
 
     Private Function AjusterRole(role As String, genre As String) As String
@@ -1313,6 +1535,220 @@ Public Class JsonEditorForm
         tb.Size = New Size(width, 23)
         Return tb
     End Function
+
+
+    Private Sub Dgv_CellDoubleClick(sender As Object, e As DataGridViewCellEventArgs)
+        If e.RowIndex < 0 Then Return
+        Dim row As DataRow = DtDepotCreateur.Rows(e.RowIndex)
+        Dim tp As String = row("Type").ToString().Trim()
+
+        If tp = "Physique" Then
+            OuvrirFichePhysique(row)
+        ElseIf tp = "Moral" Then
+            OuvrirFicheMorale(row)
+        End If
+    End Sub
+
+    Private Sub OuvrirFichePhysique(row As DataRow)
+        ' Retrouver la ligne complete dans DtPersonPhy (source = XLSX)
+        Dim srcRow As DataRow = Nothing
+        If DtPersonPhy IsNot Nothing Then
+            Dim nom As String = row("Nom").ToString().Trim()
+            Dim prenom As String = row("Prenom").ToString().Trim()
+            Dim pseudo As String = row("Pseudonyme").ToString().Trim()
+            For Each r As DataRow In DtPersonPhy.Rows
+                Dim rNom As String = SafeStr(r, "Nom").Trim()
+                Dim rPrenom As String = SafeStr(r, "Prenom").Trim()
+                Dim rPseudo As String = SafeStr(r, "Pseudonyme").Trim()
+                If (Not String.IsNullOrEmpty(nom) AndAlso rNom = nom AndAlso rPrenom = prenom) OrElse
+                   (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
+                    srcRow = r
+                    Exit For
+                End If
+            Next
+        End If
+
+        ' Construire le tableau de valeurs depuis srcRow (XLSX) ou row (grille) en fallback
+        Dim cols() As String = PersonnesForm.ColsPhy
+        Dim vals(cols.Length - 1) As String
+        For i As Integer = 0 To cols.Length - 1
+            Dim col As String = cols(i)
+            If srcRow IsNot Nothing Then
+                ' Chercher la colonne dans DtPersonPhy (nom exact ou variante)
+                Try
+                    vals(i) = srcRow(col).ToString()
+                Catch
+                    vals(i) = ""
+                End Try
+            End If
+            ' Fallback sur DtDepotCreateur pour les champs qu on a
+            If String.IsNullOrEmpty(vals(i)) Then
+                Select Case col
+                    Case "Pseudonyme" : vals(i) = row("Pseudonyme").ToString()
+                    Case "Nom" : vals(i) = row("Nom").ToString()
+                    Case "Prenom" : vals(i) = row("Prenom").ToString()
+                    Case "Genre" : vals(i) = row("Genre").ToString()
+                    Case "Role" : vals(i) = row("Role").ToString()
+                    Case "COAD"
+                        Dim ci As String = row("COAD_IPI").ToString()
+                        If ci.StartsWith("COAD : ") Then vals(i) = ci.Substring(7).Trim()
+                    Case "IPI"
+                        Dim ci As String = row("COAD_IPI").ToString()
+                        If ci.StartsWith("IPI : ") Then vals(i) = ci.Substring(6).Trim()
+                    Case "Num de voie" : vals(i) = row("NumVoie").ToString()
+                    Case "Type de voie" : vals(i) = row("TypeVoie").ToString()
+                    Case "Nom de voie" : vals(i) = row("NomVoie").ToString()
+                    Case "CP" : vals(i) = row("CP").ToString()
+                    Case "Ville" : vals(i) = row("Ville").ToString()
+                    Case "Mail" : vals(i) = row("Mail").ToString()
+                    Case "Tel" : vals(i) = row("Tel").ToString()
+                End Select
+            End If
+        Next
+
+        Using f As New FichePersonneForm(cols, vals, "Modifier Personne Physique")
+            If f.ShowDialog(Me) <> DialogResult.OK Then Return
+            Dim res() As String = f.GetValues()
+
+            ' Mettre à jour DtPersonPhy si la ligne source existe
+            If srcRow IsNot Nothing Then
+                For i As Integer = 0 To cols.Length - 1
+                    Try
+                        srcRow(cols(i)) = res(i)
+                    Catch
+                    End Try
+                Next
+            End If
+
+            ' Mettre à jour DtDepotCreateur (grille)
+            row("Pseudonyme") = res(0)
+            row("Nom") = res(1)
+            row("Prenom") = res(2)
+            row("Genre") = res(3)
+            row("Role") = res(5)
+            Dim coad As String = res(6).Trim()
+            Dim ipi As String = res(7).Trim()
+            If Not String.IsNullOrEmpty(coad) Then
+                row("COAD_IPI") = "COAD : " & coad
+            ElseIf Not String.IsNullOrEmpty(ipi) Then
+                row("COAD_IPI") = "IPI : " & ipi
+            End If
+            row("NumVoie") = res(9)
+            row("TypeVoie") = res(10)
+            row("NomVoie") = res(11)
+            row("CP") = res(12)
+            row("Ville") = res(13)
+            row("Mail") = res(14)
+            row("Tel") = res(15)
+            Dim nom2 As String = res(1).Trim()
+            Dim prenom2 As String = res(2).Trim()
+            Dim pseudo2 As String = res(0).Trim()
+            If Not String.IsNullOrEmpty(pseudo2) Then
+                row("Designation") = nom2 & " " & prenom2 & " / " & pseudo2
+            Else
+                row("Designation") = (nom2 & " " & prenom2).Trim()
+            End If
+            dgv.Refresh()
+            ApplyRowColors()
+            lblStatut.Text = "Personne physique mise à jour."
+        End Using
+    End Sub
+
+    Private Sub OuvrirFicheMorale(row As DataRow)
+        ' Retrouver la ligne complete dans DtPersonMor (source = XLSX)
+        Dim srcRow As DataRow = Nothing
+        If DtPersonMor IsNot Nothing Then
+            Dim desig As String = row("Designation").ToString().Trim().ToUpper()
+            For Each r As DataRow In DtPersonMor.Rows
+                If SafeStr(r, "Designation").Trim().ToUpper() = desig Then
+                    srcRow = r
+                    Exit For
+                End If
+            Next
+        End If
+
+        Dim cols() As String = PersonnesForm.ColsMor
+        Dim vals(cols.Length - 1) As String
+        For i As Integer = 0 To cols.Length - 1
+            Dim col As String = cols(i)
+            If srcRow IsNot Nothing Then
+                Try
+                    vals(i) = srcRow(col).ToString()
+                Catch
+                    vals(i) = ""
+                End Try
+            End If
+            If String.IsNullOrEmpty(vals(i)) Then
+                Select Case col
+                    Case "Designation" : vals(i) = row("Designation").ToString()
+                    Case "COAD"
+                        Dim ci As String = row("COAD_IPI").ToString()
+                        If ci.StartsWith("COAD : ") Then vals(i) = ci.Substring(7).Trim()
+                    Case "IPI"
+                        Dim ci As String = row("COAD_IPI").ToString()
+                        If ci.StartsWith("IPI : ") Then vals(i) = ci.Substring(6).Trim()
+                    Case "Forme Juridique" : vals(i) = row("FormeJuridique").ToString()
+                    Case "Capital" : vals(i) = row("Capital").ToString()
+                    Case "RCS" : vals(i) = row("RCS").ToString()
+                    Case "Siren" : vals(i) = row("Siren").ToString()
+                    Case "Num de voie" : vals(i) = row("NumVoie").ToString()
+                    Case "Type de voie" : vals(i) = row("TypeVoie").ToString()
+                    Case "Nom de voie" : vals(i) = row("NomVoie").ToString()
+                    Case "CP" : vals(i) = row("CP").ToString()
+                    Case "Ville" : vals(i) = row("Ville").ToString()
+                    Case "Prenom representant" : vals(i) = row("PrenomRepresentant").ToString()
+                    Case "Nom representant" : vals(i) = row("NomRepresentant").ToString()
+                    Case "Fonction representant" : vals(i) = row("FonctionRepresentant").ToString()
+                    Case "Mail" : vals(i) = row("Mail").ToString()
+                    Case "Tel" : vals(i) = row("Tel").ToString()
+                End Select
+            End If
+        Next
+
+        Using f As New FichePersonneForm(cols, vals, "Modifier Personne Morale")
+            If f.ShowDialog(Me) <> DialogResult.OK Then Return
+            Dim res() As String = f.GetValues()
+
+            ' Mettre à jour DtPersonMor si la ligne source existe
+            If srcRow IsNot Nothing Then
+                For i As Integer = 0 To cols.Length - 1
+                    Try
+                        srcRow(cols(i)) = res(i)
+                    Catch
+                    End Try
+                Next
+            End If
+
+            ' Mettre à jour DtDepotCreateur (grille)
+            row("Designation") = res(0)
+            Dim coad As String = res(1).Trim()
+            Dim ipi As String = res(2).Trim()
+            If Not String.IsNullOrEmpty(coad) Then
+                row("COAD_IPI") = "COAD : " & coad
+            ElseIf Not String.IsNullOrEmpty(ipi) Then
+                row("COAD_IPI") = "IPI : " & ipi
+            End If
+            row("FormeJuridique") = res(3)
+            row("Capital") = res(4)
+            row("RCS") = res(5)
+            row("Siren") = res(6)
+            row("NumVoie") = res(7)
+            row("TypeVoie") = res(8)
+            row("NomVoie") = res(9)
+            row("CP") = res(10)
+            row("Ville") = res(11)
+            row("PrenomRepresentant") = res(12)
+            row("NomRepresentant") = res(13)
+            row("FonctionRepresentant") = res(14)
+            row("Mail") = res(15)
+            row("Tel") = res(16)
+            dgv.Refresh()
+            ApplyRowColors()
+            lblStatut.Text = "Personne morale mise à jour."
+        End Using
+    End Sub
+
+
 
 End Class
 
@@ -1399,4 +1835,5 @@ Public Class FormRoles
                             MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End If
     End Sub
+
 End Class
