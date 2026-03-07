@@ -281,7 +281,9 @@ Public Class JsonEditorForm
         AddHandler dgv.CellBeginEdit, AddressOf Dgv_CellBeginEdit
         AddHandler dgv.DataError, AddressOf Dgv_DataError
         AddHandler dgv.CellDoubleClick, AddressOf Dgv_CellDoubleClick
+        AddHandler dgv.CellValueChanged, AddressOf Dgv_CellValueChanged
         AddHandler mnuSupprimer.Click, AddressOf MnuSupprimer_Click
+        AddHandler cbInegalitaire.CheckedChanged, AddressOf CbInegalitaire_CheckedChanged
         AddHandler Me.Load, AddressOf JsonEditorForm_Load
     End Sub
 
@@ -353,7 +355,7 @@ Public Class JsonEditorForm
         Dim visible As New Dictionary(Of String, Integer) From {
             {"Id", 70}, {"Designation", 250}, {"Role", 45}, {"Lettrage", 60},
             {"SocieteGestion", 90}, {"Signataire", 70}, {"COAD_IPI", 130},
-            {"PH", 60}
+            {"PH", 60}, {"DE", 70}, {"DR", 70}
         }
 
         For Each kvp In visible
@@ -368,6 +370,12 @@ Public Class JsonEditorForm
         dgv.Columns("SocieteGestion").HeaderText = "Société"
         dgv.Columns("COAD_IPI").HeaderText = "COAD/IPI"
         dgv.Columns("Signataire").HeaderText = "Signataire"
+        dgv.Columns("PH").HeaderText = "PH %"
+        dgv.Columns("DE").HeaderText = "DEP %"
+        dgv.Columns("DR").HeaderText = "DR %"
+        ' DEP et DR sont calculés automatiquement — lecture seule
+        dgv.Columns("DE").ReadOnly = True
+        dgv.Columns("DR").ReadOnly = True
 
         ' Remplacer Managelic et Managesub par des ComboBoxColumn
         SetupMoraleComboColumn("Managelic", 150)
@@ -440,7 +448,7 @@ Public Class JsonEditorForm
     ' CHARGEMENT XLSX LOCAL
     ' ─────────────────────────────────────────────────────────────
     Private Sub ChargerGoogleSheet()
-        Dim localPath As String = PersonnesForm.DefaultXlsxPath
+        Dim localPath As String = PersonnesForm.ResolveXlsxPath()
         Try
             If File.Exists(localPath) Then
                 lblStatut.Text = "Chargement de la base de données..."
@@ -489,7 +497,7 @@ Public Class JsonEditorForm
 
 
     Private Sub BtnGererFiches_Click(sender As Object, e As EventArgs)
-        Dim xlsxPath As String = PersonnesForm.DefaultXlsxPath
+        Dim xlsxPath As String = PersonnesForm.ResolveXlsxPath()
         Using f As New PersonnesForm(xlsxPath)
             f.ShowDialog()
         End Using
@@ -672,6 +680,11 @@ Public Class JsonEditorForm
             AjouterPersonnePhysique(sel)
         End If
 
+        ' Recalcul automatique PH en cascade puis DEP/DR
+        Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
+        MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
+        MoteurRepartition.Calculer(DtDepotCreateur, params)
+
         UpdateLettrages()
         ApplyRowColors()
         RefreshDeclarationFormat()
@@ -680,7 +693,7 @@ Public Class JsonEditorForm
 
     ''' <summary>Relit le xlsx depuis le disque pour avoir les données fraîches.</summary>
     Private Sub RafraichirBDD()
-        Dim localPath As String = PersonnesForm.DefaultXlsxPath
+        Dim localPath As String = PersonnesForm.ResolveXlsxPath()
         If Not File.Exists(localPath) Then Return
         Try
             DtPersonPhy = LoadSheetXlsxLocal(localPath, "PERSONNEPHYSIQUE")
@@ -759,7 +772,7 @@ Public Class JsonEditorForm
 
     Private Sub SauvegarderXlsxSilencieux()
         Try
-            Dim localPath As String = PersonnesForm.DefaultXlsxPath
+            Dim localPath As String = PersonnesForm.ResolveXlsxPath()
             If Not File.Exists(localPath) Then Return
             Using pkg As New ExcelPackage(New FileInfo(localPath))
                 Dim existing = pkg.Workbook.Worksheets("PERSONNEPHYSIQUE")
@@ -865,10 +878,10 @@ Public Class JsonEditorForm
                 End If
             Next
 
-            ' Ajouter chaque éditeur avec sa part calculée
+            ' Ajouter chaque éditeur avec sa part relative (% dans le groupe éditeurs)
             For Each eid As String In editeurIds
-                Dim quotePartCoed As Double = partsExplicites(eid) / 100.0
-                AjouterEditeurParDefaut(eid, nr, quotePartCoed)
+                Dim partPct As Double = partsExplicites(eid)
+                AjouterEditeurParDefaut(eid, nr, partPct)
             Next
         Else
             ' Demander EAC si déjà un éditeur
@@ -892,17 +905,15 @@ Public Class JsonEditorForm
     End Sub
 
     ''' <summary>
-    ''' Ajoute un éditeur lié à un AC dans la grille.
-    ''' quotePartCoed = fraction de la part AC attribuée à cet éditeur (ex: 0.6 pour 60%).
-    ''' PH de l'éditeur = PH de l'AC * quotePartCoed.
+    ''' Ajoute un éditeur lié à un créateur dans la grille.
+    ''' partPct = part % de cet éditeur dans la part éditeur du créateur (ex: 60.0 pour 60%).
+    ''' Le PH définitif est recalculé par RecalculerPHApresAjout après l'ajout.
     ''' </summary>
     Private Sub AjouterEditeurParDefaut(editeurId As String, creaRow As DataRow,
-                                        Optional quotePartCoed As Double = 1.0)
-        ' Calculer PH éditeur = PH AC * quote-part coéditeur
-        Dim phAC As Double = 0
-        Double.TryParse(creaRow("PH").ToString(), phAC)
-        Dim phEditeur As Double = Math.Round(phAC * quotePartCoed, 2)
-        Dim phStr As String = If(phEditeur > 0, phEditeur.ToString("0.##"), "")
+                                        Optional partPct As Double = 0.0)
+        ' PH éditeur = partPct (sera recalibré par RecalculerPHApresAjout)
+        ' On stocke partPct comme valeur provisoire pour conserver les proportions relatives
+        Dim phStr As String = If(partPct > 0, partPct.ToString("0.##", Globalization.CultureInfo.InvariantCulture), "0")
 
         If editeurId = "EAC" Then
             Dim nrEAC2 As DataRow = DtDepotCreateur.NewRow()
@@ -948,11 +959,11 @@ Public Class JsonEditorForm
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
-    ' CALCUL DES POURCENTAGES
+    ' CALCUL DES POURCENTAGES — MOTEUR REPARTITION
     ' ─────────────────────────────────────────────────────────────
     Private Sub BtnCalculer_Click(sender As Object, e As EventArgs)
         Try
-            CalculerPourcentages()
+            AppelerMoteur()
             UpdateLettrages()
             dgv.Refresh()
             lblStatut.Text = "Pourcentages calculés."
@@ -961,47 +972,67 @@ Public Class JsonEditorForm
         End Try
     End Sub
 
-    Private Sub CalculerPourcentages()
-        Dim rows = DtDepotCreateur.AsEnumerable().ToList()
-        Dim countA As Integer = rows.Where(Function(r) r("Role").ToString() = "A").Count()
-        Dim countC As Integer = rows.Where(Function(r) r("Role").ToString() = "C").Count()
-        Dim countE As Integer = rows.Where(Function(r) r("Role").ToString() = "E").Count()
-        Dim inegal As Boolean = cbInegalitaire.Checked
+    ''' <summary>Recalcul automatique quand la valeur PH change dans la grille.</summary>
+    Private Sub Dgv_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs)
+        If e.RowIndex < 0 Then Return
+        ' Déclencher uniquement sur la colonne PH
+        If dgv.Columns(e.ColumnIndex).Name = "PH" Then
+            AppelerMoteur()
+            dgv.Refresh()
+        End If
+    End Sub
 
-        For Each row As DataRow In rows
-            Dim role As String = row("Role").ToString()
-            Dim ph As Decimal = 0
-            Decimal.TryParse(row("PH").ToString().Replace(",", "."),
-                Globalization.NumberStyles.Any,
-                Globalization.CultureInfo.InvariantCulture, ph)
+    ''' <summary>Recalcul automatique quand on coche/décoche Inégalitaire.</summary>
+    Private Sub CbInegalitaire_CheckedChanged(sender As Object, e As EventArgs)
+        AppelerMoteur()
+        dgv.Refresh()
+    End Sub
 
-            Dim de As Decimal = 0
-            Dim dr As Decimal = 0
+    ''' <summary>
+    ''' Construit les paramètres de l'œuvre depuis les contrôles UI.
+    ''' </summary>
+    Private Function GetParamsOeuvre() As MoteurRepartition.ParamsOeuvre
+        Dim p As New MoteurRepartition.ParamsOeuvre()
 
-            If Not inegal Then
-                ' Égalitaire
-                If countE > 0 Then
-                    If countA > 0 AndAlso countC > 0 Then
-                        If role = "A" Then de = Math.Round(100D / 3 / countA, 4) : dr = Math.Round(100D / 3 / countA, 4)
-                        If role = "C" Then de = Math.Round(100D / 3 / countC, 4) : dr = Math.Round(100D / 3 / countC, 4)
-                        If role = "E" Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(100D / 3 / countE, 4)
-                    ElseIf countA > 0 Then
-                        If role = "A" Then de = Math.Round(200D / 3 / countA, 4) : dr = Math.Round(50D / countA, 4)
-                        If role = "E" Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(50D / countE, 4)
-                    ElseIf countC > 0 Then
-                        If role = "C" Then de = Math.Round(200D / 3 / countC, 4) : dr = Math.Round(50D / countC, 4)
-                        If role = "E" Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(50D / countE, 4)
-                    End If
-                Else
-                    If role = "A" Then de = Math.Round(100D / countA, 4) : dr = de
-                    If role = "C" Then de = Math.Round(100D / countC, 4) : dr = de
-                End If
-            End If
-            ' Inégalitaire : laisser l'utilisateur saisir PH manuellement pour l'instant
+        ' Type d'œuvre selon genre
+        Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing,
+                                  cbGenre.SelectedItem.ToString(), cbGenre.Text).ToLower()
+        If genre.Contains("texte") OrElse genre.Contains("chronique") OrElse
+           genre.Contains("poeme") OrElse genre.Contains("sketch") OrElse
+           genre.Contains("billet") Then
+            p.TypeOeuvre = MoteurRepartition.TypeOeuvre.LitteraireSeule
+        ElseIf genre.Contains("instrumental") Then
+            p.TypeOeuvre = MoteurRepartition.TypeOeuvre.MusiqueSeule
+        Else
+            p.TypeOeuvre = MoteurRepartition.TypeOeuvre.ParolesEtMusique
+        End If
 
-            row("DE") = de.ToString(Globalization.CultureInfo.InvariantCulture)
-            row("DR") = dr.ToString(Globalization.CultureInfo.InvariantCulture)
-        Next
+        ' Éditée = au moins un éditeur dans la grille
+        p.EstEditee = DtDepotCreateur.AsEnumerable().Any(Function(r) r("Role").ToString() = "E")
+
+        ' Domaine public
+        p.EstDomainePublic = False  ' TODO : ajouter checkbox si besoin
+
+        ' Exception film/symphonique
+        p.EstFilmOuSymphonique = genre.Contains("film") OrElse genre.Contains("symphonique")
+
+        ' Inégalitaire
+        p.Inegalitaire = cbInegalitaire.Checked
+
+        Return p
+    End Function
+
+    ''' <summary>
+    ''' Point d'entrée unique pour déclencher le moteur.
+    ''' Appelé après chaque ajout, suppression, changement PH ou Inégalitaire.
+    ''' </summary>
+    Private Sub AppelerMoteur()
+        Try
+            Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
+            MoteurRepartition.Calculer(DtDepotCreateur, params)
+        Catch ex As Exception
+            lblStatut.Text = "Erreur moteur : " & ex.Message
+        End Try
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -1312,7 +1343,14 @@ Public Class JsonEditorForm
         End If
 
         dgv.Rows.Remove(selRow)
+
+        ' Recalcul automatique PH en cascade puis DEP/DR
+        Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
+        MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
+        MoteurRepartition.Calculer(DtDepotCreateur, params)
+
         UpdateLettrages()
+        ApplyRowColors()
         RefreshDeclarationFormat()
         dgv.Refresh()
     End Sub
