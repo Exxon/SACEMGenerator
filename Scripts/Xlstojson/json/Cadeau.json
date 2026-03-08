@@ -1,104 +1,155 @@
 ﻿{
   "Titre": "Cadeau",
   "SousTitre": "Saamou ft. Genezio - Cadeau (Clip Officiel)",
-  "Interprete": "Saamou ft. Genezio",
-  "Duree": "2:35",
+  "Interprete": "SAAMOU / GENEZIO",
+  "Duree": "2:34",
   "Genre": "Chant",
-  "Date": "14/02/2025",
+  "Date": "08/03/2026",
   "ISWC": "",
   "Lieu": "Deezer / Spotify / Amazon Music / Youtube/ Apple Music",
   "Territoire": "Monde",
   "Arrangement": "",
-  "Inegalitaire": "FALSE",
-  "Declaration": "",
-  "Format": "",
-  "Faita": "",
-  "Faitle": "05/03/2026",
+  "Inegalitaire": "TRUE",
+  "Declaration": "Bellum Publishing",
+  "Format": "Bellum Publishing",
+  "Faita": "Paris",
+  "Faitle": "08/03/2026",
   "Commentaire": "",
   "AyantsDroit": [
     {
-      "Ref": "Saamou Sku",
-      "Type": "Physique",
+      "Id": "P00152",
       "Role": "A",
       "Lettrage": "A",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "Bellum Publishing",
-      "Type": "Moral",
+      "Id": "M00074",
       "Role": "E",
       "Lettrage": "A",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "6.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "TH RECORDS",
-      "Type": "Moral",
+      "Id": "M00007",
       "Role": "E",
       "Lettrage": "A",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "6.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "GENEZIO",
-      "Type": "Physique",
+      "Id": "P00186",
       "Role": "A",
       "Lettrage": "B",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "JOUUUE PUBLISHING",
-      "Type": "Moral",
+      "Id": "M00082",
       "Role": "E",
       "Lettrage": "B",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "Eliyel",
-      "Type": "Physique",
+      "Id": "P00187",
       "Role": "C",
       "Lettrage": "C",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "8.3333",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
     },
     {
-      "Ref": "Warner Chapell Music France",
-      "Type": "Moral",
+      "Id": "P00187",
       "Role": "E",
       "Lettrage": "C",
-      "PH": "",
-      "DE": "",
-      "DR": "",
+      "PH": "8.3333",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": "TRUE"
+      "Signataire": true
+    },
+    {
+      "Id": "P00185",
+      "Role": "C",
+      "Lettrage": "D",
+      "PH": "8.3333",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00081",
+      "Role": "E",
+      "Lettrage": "D",
+      "PH": "1.25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00082",
+      "Role": "E",
+      "Lettrage": "D",
+      "PH": "2.9167",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00067",
+      "Role": "E",
+      "Lettrage": "D",
+      "PH": "4.1666",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "P00188",
+      "Role": "C",
+      "Lettrage": "E",
+      "PH": "8.3333",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00067",
+      "Role": "E",
+      "Lettrage": "E",
+      "PH": "4.1666",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00082",
+      "Role": "E",
+      "Lettrage": "E",
+      "PH": "2.9167",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
+    },
+    {
+      "Id": "M00081",
+      "Role": "E",
+      "Lettrage": "E",
+      "PH": "1.25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true
     }
   ]
 }

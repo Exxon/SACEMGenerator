@@ -75,89 +75,28 @@ Public Class SACEMJsonReader
     Private Shared Function ParseAyantDroit(jObj As JObject) As AyantDroit
         Dim ayant As New AyantDroit()
 
-        ' Identite
-        If jObj("Identite") IsNot Nothing Then
-            Dim identiteObj As JObject = CType(jObj("Identite"), JObject)
-            ayant.Identite.Designation = GetStringValue(identiteObj, "Designation")
-            ayant.Identite.Type = GetStringValue(identiteObj, "Type")
-            ayant.Identite.Pseudonyme = GetStringValue(identiteObj, "Pseudonyme")
-            ayant.Identite.Nom = GetStringValue(identiteObj, "Nom")
-            ayant.Identite.Prenom = GetStringValue(identiteObj, "Prenom")
-            
-            ' Société de gestion collective (SACEM, GEMA, KODA, etc.)
-            ayant.Identite.SocieteGestion = GetStringValue(identiteObj, "SocieteGestion")
-            
-            ' Naissance (pour personnes physiques)
-            ayant.Identite.Nele = GetStringValue(identiteObj, "Nele")
-            ayant.Identite.Nea = GetStringValue(identiteObj, "Nea")
-            
-            ' Pour les personnes physiques, Genre = MR/MME
-            ' Pour les personnes morales, Genre contient la forme juridique (SAS, EURL, etc.)
-            Dim genreValue As String = GetStringValue(identiteObj, "Genre")
-            
-            If ayant.Identite.Type = "Physique" Then
-                ayant.Identite.Genre = genreValue  ' MR ou MME
-                ayant.Identite.FormeJuridique = ""
-            Else
-                ' Personne morale : Genre contient la forme juridique
-                ayant.Identite.Genre = ""
-                ayant.Identite.FormeJuridique = genreValue  ' SAS, EURL, SASU, etc.
-            End If
-            
-            ' Lire aussi FormeJuridique si elle existe explicitement
-            Dim formeExplicite As String = GetStringValue(identiteObj, "FormeJuridique")
-            If Not String.IsNullOrEmpty(formeExplicite) Then
-                ayant.Identite.FormeJuridique = formeExplicite
-            End If
-            
-            ayant.Identite.Capital = GetStringValue(identiteObj, "Capital")
-            ayant.Identite.RCS = GetStringValue(identiteObj, "RCS")
-            ayant.Identite.Siren = GetStringValue(identiteObj, "Siren")
-            ayant.Identite.PrenomRepresentant = GetStringValue(identiteObj, "PrenomRepresentant")
-            ' Gérer les 2 orthographes possibles : PrénomRepresentant et PrenomRepresentant
-            If String.IsNullOrEmpty(ayant.Identite.PrenomRepresentant) Then
-                ayant.Identite.PrenomRepresentant = GetStringValue(identiteObj, "PrénomRepresentant")
-            End If
-            ayant.Identite.NomRepresentant = GetStringValue(identiteObj, "NomRepresentant")
-            ayant.Identite.GenreRepresentant = GetStringValue(identiteObj, "GenreRepresentant")
-            ayant.Identite.FonctionRepresentant = GetStringValue(identiteObj, "FonctionRepresentant")
-        End If
+        ' Format plat : Id, Role, Lettrage, PH, Signataire, Managelic, Managesub a la racine
+        ' L'identite est reenrichie depuis le XLSX dans JsonEditorForm via l'Id
+        ayant.BDO.Id        = GetStringValue(jObj, "Id")
+        ayant.BDO.Role      = GetStringValue(jObj, "Role")
+        ayant.BDO.PH        = GetStringValue(jObj, "PH")
+        ayant.BDO.Lettrage  = GetStringValue(jObj, "Lettrage")
+        ayant.BDO.Managelic = GetStringValue(jObj, "Managelic")
+        ayant.BDO.Managesub = GetStringValue(jObj, "Managesub")
 
-        ' BDO - nouveau format (Id) + compatibilité ancien format (Ref/Type)
-        If jObj("BDO") IsNot Nothing Then
-            Dim bdoObj As JObject = CType(jObj("BDO"), JObject)
-            ayant.BDO.Id = GetStringValue(bdoObj, "Id")
-            ayant.BDO.Role = GetStringValue(bdoObj, "Role")
-            ayant.BDO.PH = GetStringValue(bdoObj, "PH")
-            ayant.BDO.Lettrage = GetStringValue(bdoObj, "Lettrage")
-            ayant.BDO.Managelic = GetStringValue(bdoObj, "Managelic")
-            ayant.BDO.Managesub = GetStringValue(bdoObj, "Managesub")
+        Dim sigStr As String = GetStringValue(jObj, "Signataire")
+        ayant.BDO.Signataire = (sigStr.ToUpper() = "TRUE" OrElse sigStr = "1")
+
+        ' Type deduit du prefixe de l'Id
+        Dim idVal As String = ayant.BDO.Id.Trim().ToUpper()
+        If idVal.StartsWith("P") Then
+            ayant.Identite.Type = "Physique"
+        ElseIf idVal.StartsWith("M") Then
+            ayant.Identite.Type = "Moral"
+        ElseIf ayant.BDO.Role = "E" Then
+            ayant.Identite.Type = "Moral"
         Else
-            ' Ancien format : Id = Ref au niveau racine
-            ayant.BDO.Id = GetStringValue(jObj, "Ref")
-            ayant.BDO.Role = GetStringValue(jObj, "Role")
-            ayant.BDO.PH = GetStringValue(jObj, "PH")
-            ayant.BDO.Lettrage = GetStringValue(jObj, "Lettrage")
-            ayant.BDO.Managelic = GetStringValue(jObj, "Managelic")
-            ayant.BDO.Managesub = GetStringValue(jObj, "Managesub")
-        End If
-
-        ' Adresse
-        If jObj("Adresse") IsNot Nothing Then
-            Dim adresseObj As JObject = CType(jObj("Adresse"), JObject)
-            ayant.Adresse.NumVoie = GetStringValue(adresseObj, "NumVoie")
-            ayant.Adresse.TypeVoie = GetStringValue(adresseObj, "TypeVoie")
-            ayant.Adresse.NomVoie = GetStringValue(adresseObj, "NomVoie")
-            ayant.Adresse.CP = GetStringValue(adresseObj, "CP")
-            ayant.Adresse.Ville = GetStringValue(adresseObj, "Ville")
-            ayant.Adresse.Pays = GetStringValue(adresseObj, "Pays")
-        End If
-
-        ' Contact
-        If jObj("Contact") IsNot Nothing Then
-            Dim contactObj As JObject = CType(jObj("Contact"), JObject)
-            ayant.Contact.Mail = GetStringValue(contactObj, "Mail")
-            ayant.Contact.Tel = GetStringValue(contactObj, "Tel")
+            ayant.Identite.Type = "Physique"
         End If
 
         Return ayant

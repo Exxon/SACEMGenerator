@@ -57,24 +57,37 @@ Public Class MoteurRepartition
     ''' </summary>
     ''' <param name="dt">DataTable DtDepotCreateur</param>
     ''' <param name="params">Paramètres de l'œuvre</param>
+    ''' <summary>
+    ''' Retourne True si le rôle est considéré comme éditeur (E ou AEC).
+    ''' AEC = Auteur-Éditeur à Compte d'Auteur — traité comme éditeur pour la répartition.
+    ''' </summary>
+    Public Shared Function IsEditeur(role As String) As Boolean
+        Dim r As String = role.Trim().ToUpper()
+        Return r = "E" OrElse r = "AEC"
+    End Function
+
     Public Shared Sub Calculer(dt As DataTable, params As ParamsOeuvre)
         If dt Is Nothing OrElse dt.Rows.Count = 0 Then Return
 
         ' 1. Recenser les ayants droit par catégorie
         Dim lignesA  As New List(Of DataRow)()   ' Auteurs
         Dim lignesC  As New List(Of DataRow)()   ' Compositeurs
-        Dim lignesE  As New List(Of DataRow)()   ' Éditeurs
+        Dim lignesE  As New List(Of DataRow)()   ' Éditeurs (E + AEC)
         Dim lignesAR As New List(Of DataRow)()   ' Arrangeurs
         Dim lignesAD As New List(Of DataRow)()   ' Adaptateurs
 
         For Each row As DataRow In dt.Rows
-            Select Case row("Role").ToString().Trim().ToUpper()
-                Case "A"  : lignesA.Add(row)
-                Case "C"  : lignesC.Add(row)
-                Case "E"  : lignesE.Add(row)
-                Case "AR" : lignesAR.Add(row)
-                Case "AD" : lignesAD.Add(row)
-            End Select
+            Dim r As String = row("Role").ToString().Trim().ToUpper()
+            If IsEditeur(r) Then
+                lignesE.Add(row)
+            Else
+                Select Case r
+                    Case "A"  : lignesA.Add(row)
+                    Case "C"  : lignesC.Add(row)
+                    Case "AR" : lignesAR.Add(row)
+                    Case "AD" : lignesAD.Add(row)
+                End Select
+            End If
         Next
 
         Dim nbA  As Integer = lignesA.Count
@@ -423,8 +436,9 @@ Public Class MoteurRepartition
 
     ''' <summary>
     ''' Répartition spéciale pour les éditeurs.
-    ''' La part DR effective est déjà calculée (MIN 50% appliqué).
-    ''' En inégalitaire : pondération par PH individuel / sommePHEditeurs.
+    ''' En inégalitaire : pondération par PH dans le groupe du même lettrage.
+    ''' Chaque groupe de lettrage reçoit une part proportionnelle à son PH total
+    ''' puis la redistribue en interne selon les PH individuels.
     ''' </summary>
     Private Shared Sub RepartirEditeurs(lignesE As List(Of DataRow),
                                          partGlobaleDEP As Double,
@@ -442,16 +456,39 @@ Public Class MoteurRepartition
                 EcrirePartsRow(row, depIndiv, drIndiv, dt)
             Next
         Else
-            ' Inégalitaire — pondération par PH individuel / sommePHEditeurs
-            If sommePHEditeurs = 0 Then
+            ' Inégalitaire — pondération par lettrage
+            ' Étape 1 : part de chaque groupe de lettrage = PH total groupe / PH total E
+            Dim totalPHE As Double = lignesE.Sum(Function(r) ParsePH(r))
+            If totalPHE = 0 Then
                 RepartirEditeurs(lignesE, partGlobaleDEP, partGlobaleDR, 0, False, dt)
                 Return
             End If
-            For Each row As DataRow In lignesE
-                Dim ph As Double = ParsePH(row)
-                Dim depIndiv As Double = Math.Round(partGlobaleDEP * ph / sommePHEditeurs, 4)
-                Dim drIndiv  As Double = Math.Round(partGlobaleDR  * ph / sommePHEditeurs, 4)
-                EcrirePartsRow(row, depIndiv, drIndiv, dt)
+
+            Dim groupes = lignesE.GroupBy(Function(r) r("Lettrage").ToString()).ToList()
+            For Each groupe In groupes
+                Dim edsDuGroupe = groupe.ToList()
+                Dim phGroupe As Double = edsDuGroupe.Sum(Function(r) ParsePH(r))
+
+                ' Part DEP/DR du groupe proportionnelle à son PH total
+                Dim depGroupe As Double = partGlobaleDEP * phGroupe / totalPHE
+                Dim drGroupe  As Double = partGlobaleDR  * phGroupe / totalPHE
+
+                If phGroupe = 0 OrElse edsDuGroupe.Count = 1 Then
+                    ' Égalitaire dans le groupe
+                    Dim depIndiv As Double = Math.Round(depGroupe / edsDuGroupe.Count, 4)
+                    Dim drIndiv  As Double = Math.Round(drGroupe  / edsDuGroupe.Count, 4)
+                    For Each row As DataRow In edsDuGroupe
+                        EcrirePartsRow(row, depIndiv, drIndiv, dt)
+                    Next
+                Else
+                    ' Inégalitaire dans le groupe — pondération par PH individuel
+                    For Each row As DataRow In edsDuGroupe
+                        Dim ph As Double = ParsePH(row)
+                        Dim depIndiv As Double = Math.Round(depGroupe * ph / phGroupe, 4)
+                        Dim drIndiv  As Double = Math.Round(drGroupe  * ph / phGroupe, 4)
+                        EcrirePartsRow(row, depIndiv, drIndiv, dt)
+                    Next
+                End If
             Next
         End If
     End Sub
@@ -477,7 +514,7 @@ Public Class MoteurRepartition
         ' Simuler l'ajout et recalculer
         Dim nbA  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "A")
         Dim nbC  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "C")
-        Dim nbE  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "E")
+        Dim nbE  As Integer = dt.AsEnumerable().Count(Function(r) IsEditeur(r("Role").ToString()))
         Dim nbAR As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AR")
         Dim nbAD As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AD")
 
@@ -485,9 +522,9 @@ Public Class MoteurRepartition
         Select Case nouveauRole.ToUpper()
             Case "A"  : nbA  += 1
             Case "C"  : nbC  += 1
-            Case "E"  : nbE  += 1
             Case "AR" : nbAR += 1
             Case "AD" : nbAD += 1
+            Case Else : If IsEditeur(nouveauRole) Then nbE += 1
         End Select
 
         Dim aArrangeur  As Boolean = nbAR > 0
@@ -495,7 +532,7 @@ Public Class MoteurRepartition
 
         ' Calculer parts DR après ajout
         Dim sommePHEditeurs As Double = dt.AsEnumerable().
-            Where(Function(r) r("Role").ToString() = "E").
+            Where(Function(r) IsEditeur(r("Role").ToString())).
             Sum(Function(r) ParsePH(r))
 
         Dim drA As Double = 0, drC As Double = 0, drE As Double = 0
@@ -510,11 +547,11 @@ Public Class MoteurRepartition
             Case "C"  : Return If(nbC > 0, Math.Round(drC / nbC, 4), 0)
             Case "AR" : Return If(nbAR > 0, Math.Round(drAR / nbAR, 4), 0)
             Case "AD" : Return If(nbAD > 0, Math.Round(drAD / nbAD, 4), 0)
-            Case "E"
-                ' Pour un éditeur : PH = part DR de son créateur associé / nb éditeurs de ce créateur
+            Case Else
+                ' Pour un éditeur (E ou AEC) : PH = part DR de son créateur associé / nb éditeurs de ce créateur
                 If Not String.IsNullOrEmpty(lettrageParent) Then
                     Dim editeursDuCreateur As Integer = dt.AsEnumerable().
-                        Count(Function(r) r("Role").ToString() = "E" AndAlso
+                        Count(Function(r) IsEditeur(r("Role").ToString()) AndAlso
                                           r("Lettrage").ToString() = lettrageParent) + 1
                     Dim partDRCreateur As Double = 0
                     Dim creaRow As DataRow = dt.AsEnumerable().
@@ -536,89 +573,239 @@ Public Class MoteurRepartition
     End Function
 
     ''' <summary>
-    ''' Recalcule et redistribue les PH de tous les ayants droit après ajout/suppression.
-    ''' Conservation des proportions internes aux coéditeurs d'un même créateur.
-    ''' Principe : PH créateur = part DR théorique (sans éditeur), PH éditeur = fraction de ce PH.
+    ''' Recalcule les PH de tous les ayants droit après ajout/suppression.
+    ''' Règle : somme PH = 100% toujours.
+    ''' PH créateur = part DR théorique de sa catégorie - somme PH de ses éditeurs.
+    ''' PH éditeurs = valeurs contractuelles conservées (ou initialisées égalitaires).
+    ''' </summary>
+    ''' <summary>
+    ''' Calcule les PH par défaut : même logique que DR.
+    ''' A=25%, C=25%, E=50% réparti égalitairement.
+    ''' Chaque catégorie est indépendante.
     ''' </summary>
     Public Shared Sub RecalculerPHApresAjout(dt As DataTable, params As ParamsOeuvre)
         If dt Is Nothing OrElse dt.Rows.Count = 0 Then Return
 
-        Dim nbA  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "A")
-        Dim nbC  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "C")
-        Dim nbE  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "E")
-        Dim nbAR As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AR")
-        Dim nbAD As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AD")
-
-        ' ── Étape 1 : calculer les parts DR théoriques à 50% éditeur ──────────
-        ' On passe sommePHEditeurs = 50 pour forcer le calcul au plafond théorique
-        ' Cela évite le cercle vicieux PH éditeur → DR → PH éditeur
-        Dim drA As Double = 0, drC As Double = 0, drE As Double = 0
-        Dim drAR As Double = 0, drAD As Double = 0
-
-        CalculerPartsDR(params, nbA, nbC, nbE, nbAR > 0, nbAD > 0,
-                        50.0,   ' sommePHEditeurs forcée à 50 → plafond théorique
-                        drA, drC, drE, drAR, drAD)
-
-        ' ── Étape 2 : PH créateurs = leur part DR théorique individuelle ───────
         Dim lignesA  = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "A").ToList()
         Dim lignesC  = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "C").ToList()
+        Dim lignesE  = dt.AsEnumerable().Where(Function(r) IsEditeur(r("Role").ToString())).ToList()
         Dim lignesAR = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "AR").ToList()
         Dim lignesAD = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "AD").ToList()
 
-        For Each row As DataRow In lignesA
-            row("PH") = Math.Round(drA / nbA, 4).ToString(Globalization.CultureInfo.InvariantCulture)
-        Next
-        For Each row As DataRow In lignesC
-            row("PH") = Math.Round(drC / nbC, 4).ToString(Globalization.CultureInfo.InvariantCulture)
-        Next
-        For Each row As DataRow In lignesAR
-            If nbAR > 0 Then row("PH") = Math.Round(drAR / nbAR, 4).ToString(Globalization.CultureInfo.InvariantCulture)
-        Next
-        For Each row As DataRow In lignesAD
-            If nbAD > 0 Then row("PH") = Math.Round(drAD / nbAD, 4).ToString(Globalization.CultureInfo.InvariantCulture)
-        Next
+        Dim aA  As Boolean = lignesA.Count  > 0
+        Dim aC  As Boolean = lignesC.Count  > 0
+        Dim aE  As Boolean = lignesE.Count  > 0
+        Dim aAR As Boolean = lignesAR.Count > 0
+        Dim aAD As Boolean = lignesAD.Count > 0
 
-        ' ── Étape 3 : PH éditeurs = fraction du PH de leur créateur associé ───
-        ' Conservation des proportions relatives entre coéditeurs d'un même créateur
-        Dim lignesE = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "E").ToList()
-        Dim groupesEditeurs = lignesE.GroupBy(Function(r) r("Lettrage").ToString())
+        ' Parts de référence (même logique que DR par défaut)
+        Dim drA As Double = 0, drC As Double = 0, drE As Double = 0
+        Dim drAR As Double = 0, drAD As Double = 0
+        CalculerPartsDR(params, lignesA.Count, lignesC.Count, lignesE.Count,
+                        aAR, aAD, 50.0, drA, drC, drE, drAR, drAD)
 
-        For Each groupe In groupesEditeurs
-            Dim lettrage As String = groupe.Key
-            Dim editeursDuGroupe = groupe.ToList()
+        ' Parts inédites de référence (sans éditeurs → 100% pour créateurs)
+        Dim drAInedit As Double = 0, drCInedit As Double = 0, drEInedit As Double = 0
+        Dim drARInedit As Double = 0, drADInedit As Double = 0
+        CalculerPartsDR(params, lignesA.Count, lignesC.Count, 0,
+                        aAR, aAD, 0.0, drAInedit, drCInedit, drEInedit, drARInedit, drADInedit)
 
-            ' Trouver le créateur associé et sa part DR théorique
-            Dim creaRow As DataRow = dt.AsEnumerable().
-                FirstOrDefault(Function(r) (r("Role").ToString() = "A" OrElse
-                                            r("Role").ToString() = "C") AndAlso
-                                            r("Lettrage").ToString() = lettrage)
+        ' Part inédite individuelle = part totale du groupe (créateur + ses éditeurs)
+        Dim partGroupeA  As Double = If(lignesA.Count  > 0, drAInedit  / lignesA.Count,  0)
+        Dim partGroupeC  As Double = If(lignesC.Count  > 0, drCInedit  / lignesC.Count,  0)
+        Dim partGroupeAR As Double = If(lignesAR.Count > 0, drARInedit / lignesAR.Count, 0)
+        Dim partGroupeAD As Double = If(lignesAD.Count > 0, drADInedit / lignesAD.Count, 0)
 
-            Dim partDRCrea As Double = 0
-            If creaRow IsNot Nothing Then
-                Select Case creaRow("Role").ToString()
-                    Case "A" : partDRCrea = If(nbA > 0, drA / nbA, 0)
-                    Case "C" : partDRCrea = If(nbC > 0, drC / nbC, 0)
-                End Select
-            End If
+        ' ── Étape 1 : PH créateurs sans éditeurs → part inédite complète ────────
+        Dim lettragesAvecEditeurs As New HashSet(Of String)(
+            lignesE.Select(Function(r) r("Lettrage").ToString()))
 
-            ' Lire les PH provisoires des éditeurs du groupe (parts relatives entre eux)
-            Dim sommePHGroupe As Double = editeursDuGroupe.Sum(Function(r) ParsePH(r))
-
-            If sommePHGroupe = 0 Then
-                ' Pas de PH provisoire → répartition égale
-                Dim phIndiv As Double = Math.Round(partDRCrea / editeursDuGroupe.Count, 4)
-                For Each row As DataRow In editeursDuGroupe
-                    row("PH") = phIndiv.ToString(Globalization.CultureInfo.InvariantCulture)
-                Next
-            Else
-                ' Conserver les proportions relatives et ramener à la part DR du créateur
-                For Each row As DataRow In editeursDuGroupe
-                    Dim ph As Double = ParsePH(row)
-                    Dim nouvPH As Double = Math.Round(partDRCrea * ph / sommePHGroupe, 4)
-                    row("PH") = nouvPH.ToString(Globalization.CultureInfo.InvariantCulture)
-                Next
+        For Each r As DataRow In lignesA
+            If Not lettragesAvecEditeurs.Contains(r("Lettrage").ToString()) Then
+                r("PH") = partGroupeA.ToString(Globalization.CultureInfo.InvariantCulture)
             End If
         Next
+        For Each r As DataRow In lignesC
+            If Not lettragesAvecEditeurs.Contains(r("Lettrage").ToString()) Then
+                r("PH") = partGroupeC.ToString(Globalization.CultureInfo.InvariantCulture)
+            End If
+        Next
+
+        ' ── Étape 2 : PH créateurs AVEC éditeurs → partGroupe / (1 + sommePartsE) ──
+        ' On calcule d'abord le PH créateur, PUIS on calcule les éditeurs dessus
+        If aE Then
+            Dim groupesE = lignesE.GroupBy(Function(r) r("Lettrage").ToString()).ToList()
+            For Each groupe In groupesE
+                Dim lettrage As String = groupe.Key
+                Dim edsDuGroupe = groupe.ToList()
+
+                Dim crea = dt.AsEnumerable().FirstOrDefault(
+                    Function(r) (r("Role").ToString() = "A" OrElse r("Role").ToString() = "C") AndAlso
+                                 r("Lettrage").ToString() = lettrage)
+                Dim partGroupe As Double = If(crea Is Nothing, 0,
+                    If(crea("Role").ToString() = "A", partGroupeA, partGroupeC))
+
+                ' Parts relatives des éditeurs (normalisées sur 1.0)
+                Dim sommePHGroupe As Double = edsDuGroupe.Sum(Function(r) ParsePH(r))
+                Dim partsRelatives As New Dictionary(Of DataRow, Double)()
+                If sommePHGroupe = 0 Then
+                    Dim partEgale As Double = 1.0 / edsDuGroupe.Count
+                    For Each r As DataRow In edsDuGroupe
+                        partsRelatives(r) = partEgale
+                    Next
+                Else
+                    For Each r As DataRow In edsDuGroupe
+                        partsRelatives(r) = ParsePH(r) / sommePHGroupe
+                    Next
+                End If
+
+                ' totalUnites = 1 (créateur) + 1 (éditeurs ensemble = 1 unité)
+                Dim phCrea As Double = Math.Round(partGroupe / 2.0, 4)
+
+                ' Mettre à jour le créateur EN PREMIER
+                If crea IsNot Nothing Then
+                    crea("PH") = phCrea.ToString(Globalization.CultureInfo.InvariantCulture)
+                End If
+
+                ' PH éditeur = PH réel du créateur × part relative de l'éditeur
+                For Each r As DataRow In edsDuGroupe
+                    r("PH") = Math.Round(phCrea * partsRelatives(r), 4).
+                              ToString(Globalization.CultureInfo.InvariantCulture)
+                Next
+            Next
+        End If
+
+        ' AR et AD
+        For Each r As DataRow In lignesAR
+            r("PH") = partGroupeAR.ToString(Globalization.CultureInfo.InvariantCulture)
+        Next
+        For Each r As DataRow In lignesAD
+            r("PH") = partGroupeAD.ToString(Globalization.CultureInfo.InvariantCulture)
+        Next
+
+        ' AR : répartition égale
+        If aAR Then
+            Dim phAR As Double = Math.Round(drAR / lignesAR.Count, 4)
+            For Each r As DataRow In lignesAR
+                r("PH") = phAR.ToString(Globalization.CultureInfo.InvariantCulture)
+            Next
+        End If
+
+        ' AD : répartition égale
+        If aAD Then
+            Dim phAD As Double = Math.Round(drAD / lignesAD.Count, 4)
+            For Each r As DataRow In lignesAD
+                r("PH") = phAD.ToString(Globalization.CultureInfo.InvariantCulture)
+            Next
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' Rééquilibre après modification manuelle d'un PH.
+    ''' - A ou C modifié → ajuste les autres A/C ET met à jour ses éditeurs (même lettrage)
+    ''' - E modifié → ajuste les autres E du même lettrage
+    ''' totalAvant = total de la sous-catégorie AVANT modification.
+    ''' </summary>
+    Public Shared Sub RééquilibrerCategorie(dt As DataTable, rowModifiee As DataRow, totalAvant As Double)
+        Dim role As String = rowModifiee("Role").ToString().Trim().ToUpper()
+        Dim lettrage As String = rowModifiee("Lettrage").ToString().Trim()
+        Dim nouvPH As Double = ParsePH(rowModifiee)
+
+        ' ── Cas créateur (A ou C) ───────────────────────────────────────────────
+        If role = "A" OrElse role = "C" Then
+
+            ' 1. Ajuster les autres créateurs de la même sous-catégorie
+            Dim autres = dt.AsEnumerable().
+                Where(Function(r) r("Role").ToString() = role AndAlso Not r Is rowModifiee).ToList()
+
+            If autres.Count > 0 Then
+                Dim reste As Double = totalAvant - nouvPH
+                Dim sommePHAutres As Double = autres.Sum(Function(r) ParsePH(r))
+                If sommePHAutres = 0 OrElse reste <= 0 Then
+                    Dim phIndiv As Double = If(reste > 0, Math.Round(reste / autres.Count, 4), 0)
+                    For Each r As DataRow In autres
+                        r("PH") = Math.Max(0, phIndiv).ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                Else
+                    For Each r As DataRow In autres
+                        Dim ph As Double = ParsePH(r)
+                        r("PH") = Math.Max(0, Math.Round(reste * ph / sommePHAutres, 4)).
+                                  ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                End If
+            End If
+
+            ' 2. Mettre à jour les éditeurs de TOUS les créateurs touchés
+            '    (le créateur modifié ET les autres ajustés)
+            Dim tousLesCreas = New List(Of DataRow)(autres) From {rowModifiee}
+            For Each crea As DataRow In tousLesCreas
+                Dim lettrCrea As String = crea("Lettrage").ToString().Trim()
+                Dim phCrea As Double = ParsePH(crea)
+                Dim editeursDuCrea = dt.AsEnumerable().
+                    Where(Function(r) IsEditeur(r("Role").ToString()) AndAlso
+                                      r("Lettrage").ToString() = lettrCrea).ToList()
+                If editeursDuCrea.Count = 0 Then Continue For
+
+                Dim sommePHEd As Double = editeursDuCrea.Sum(Function(r) ParsePH(r))
+                If sommePHEd = 0 Then
+                    Dim phIndiv As Double = Math.Round(phCrea / editeursDuCrea.Count, 4)
+                    For Each r As DataRow In editeursDuCrea
+                        r("PH") = phIndiv.ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                Else
+                    For Each r As DataRow In editeursDuCrea
+                        Dim ph As Double = ParsePH(r)
+                        r("PH") = Math.Round(phCrea * ph / sommePHEd, 4).
+                                  ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                End If
+            Next
+
+        ' ── Cas éditeur (E) ─────────────────────────────────────────────────────
+        ElseIf IsEditeur(role) Then
+            Dim autres = dt.AsEnumerable().
+                Where(Function(r) IsEditeur(r("Role").ToString()) AndAlso
+                                  r("Lettrage").ToString() = lettrage AndAlso
+                                  Not r Is rowModifiee).ToList()
+
+            If autres.Count > 0 Then
+                Dim reste As Double = totalAvant - nouvPH
+                Dim sommePHAutres As Double = autres.Sum(Function(r) ParsePH(r))
+                If sommePHAutres = 0 OrElse reste <= 0 Then
+                    Dim phIndiv As Double = If(reste > 0, Math.Round(reste / autres.Count, 4), 0)
+                    For Each r As DataRow In autres
+                        r("PH") = Math.Max(0, phIndiv).ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                Else
+                    For Each r As DataRow In autres
+                        Dim ph As Double = ParsePH(r)
+                        r("PH") = Math.Max(0, Math.Round(reste * ph / sommePHAutres, 4)).
+                                  ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                End If
+            End If
+
+        ' ── Cas AR / AD ─────────────────────────────────────────────────────────
+        ElseIf role = "AR" OrElse role = "AD" Then
+            Dim autres = dt.AsEnumerable().
+                Where(Function(r) r("Role").ToString() = role AndAlso Not r Is rowModifiee).ToList()
+            If autres.Count > 0 Then
+                Dim reste As Double = totalAvant - nouvPH
+                Dim sommePHAutres As Double = autres.Sum(Function(r) ParsePH(r))
+                If sommePHAutres = 0 OrElse reste <= 0 Then
+                    Dim phIndiv As Double = If(reste > 0, Math.Round(reste / autres.Count, 4), 0)
+                    For Each r As DataRow In autres
+                        r("PH") = Math.Max(0, phIndiv).ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                Else
+                    For Each r As DataRow In autres
+                        Dim ph As Double = ParsePH(r)
+                        r("PH") = Math.Max(0, Math.Round(reste * ph / sommePHAutres, 4)).
+                                  ToString(Globalization.CultureInfo.InvariantCulture)
+                    Next
+                End If
+            End If
+        End If
     End Sub
 
     ' ─────────────────────────────────────────────────────────────

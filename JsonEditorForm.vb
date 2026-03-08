@@ -49,6 +49,8 @@ Public Class JsonEditorForm
     Private WithEvents btnAjouter As Button
     Private WithEvents dgv As DataGridView
     Private WithEvents btnCalculer As Button
+    Private WithEvents txtRecherche As TextBox
+    Private WithEvents lstResultats As ListBox
     Private WithEvents btnSauvegarder As Button
     Private WithEvents btnChargerJson As Button
     Private WithEvents btnGererFiches As Button
@@ -196,12 +198,27 @@ Public Class JsonEditorForm
         ' Barre de sélection
         cbPersonnes = New ComboBox()
         cbPersonnes.Location = New Point(10, 25)
-        cbPersonnes.Size = New Size(380, 23)
+        cbPersonnes.Size = New Size(280, 23)
+        cbPersonnes.Visible = False
         grpAD.Controls.Add(cbPersonnes)
+
+        ' Recherche live
+        txtRecherche = New TextBox()
+        txtRecherche.Location = New Point(10, 25)
+        txtRecherche.Size = New Size(280, 23)
+        txtRecherche.ForeColor = Color.Gray
+        txtRecherche.Text = "Nom, prénom, pseudonyme..."
+        grpAD.Controls.Add(txtRecherche)
+
+        lstResultats = New ListBox()
+        lstResultats.Location = New Point(10, 50)
+        lstResultats.Size = New Size(380, 100)
+        lstResultats.Visible = False
+        grpAD.Controls.Add(lstResultats)
 
         btnAjouter = New Button()
         btnAjouter.Text = "AJOUTER"
-        btnAjouter.Location = New Point(400, 24)
+        btnAjouter.Location = New Point(300, 24)
         btnAjouter.Size = New Size(85, 25)
         grpAD.Controls.Add(btnAjouter)
 
@@ -281,9 +298,14 @@ Public Class JsonEditorForm
         AddHandler dgv.CellBeginEdit, AddressOf Dgv_CellBeginEdit
         AddHandler dgv.DataError, AddressOf Dgv_DataError
         AddHandler dgv.CellDoubleClick, AddressOf Dgv_CellDoubleClick
-        AddHandler dgv.CellValueChanged, AddressOf Dgv_CellValueChanged
         AddHandler mnuSupprimer.Click, AddressOf MnuSupprimer_Click
+        AddHandler dgv.CellValueChanged, AddressOf Dgv_CellValueChanged
+        AddHandler dgv.CurrentCellDirtyStateChanged, AddressOf Dgv_CurrentCellDirtyStateChanged
         AddHandler cbInegalitaire.CheckedChanged, AddressOf CbInegalitaire_CheckedChanged
+        AddHandler txtRecherche.TextChanged, AddressOf TxtRecherche_Changed
+        AddHandler txtRecherche.GotFocus, AddressOf TxtRecherche_GotFocus
+        AddHandler txtRecherche.LostFocus, AddressOf TxtRecherche_LostFocus
+        AddHandler lstResultats.DoubleClick, AddressOf LstResultats_DoubleClick
         AddHandler Me.Load, AddressOf JsonEditorForm_Load
     End Sub
 
@@ -344,6 +366,7 @@ Public Class JsonEditorForm
         DtDepotCreateur.Columns.Add("Tel", GetType(String))
         ' Interne (éditeur par défaut depuis sheet)
         DtDepotCreateur.Columns.Add("_EditeurDefaut", GetType(String))
+        DtDepotCreateur.Columns.Add("_Orphelin", GetType(Boolean))
     End Sub
 
     Private Sub ConfigureGridColumns()
@@ -371,11 +394,10 @@ Public Class JsonEditorForm
         dgv.Columns("COAD_IPI").HeaderText = "COAD/IPI"
         dgv.Columns("Signataire").HeaderText = "Signataire"
         dgv.Columns("PH").HeaderText = "PH %"
-        dgv.Columns("DE").HeaderText = "DEP %"
-        dgv.Columns("DR").HeaderText = "DR %"
-        ' DEP et DR sont calculés automatiquement — lecture seule
-        dgv.Columns("DE").ReadOnly = True
-        dgv.Columns("DR").ReadOnly = True
+        If dgv.Columns.Contains("DE") Then dgv.Columns("DE").HeaderText = "DEP %"
+        If dgv.Columns.Contains("DR") Then dgv.Columns("DR").HeaderText = "DR %"
+        If dgv.Columns.Contains("DE") Then dgv.Columns("DE").ReadOnly = True
+        If dgv.Columns.Contains("DR") Then dgv.Columns("DR").ReadOnly = True
 
         ' Remplacer Managelic et Managesub par des ComboBoxColumn
         SetupMoraleComboColumn("Managelic", 150)
@@ -430,7 +452,7 @@ Public Class JsonEditorForm
 
         For Each row As DataRow In DtDepotCreateur.Rows
             Dim role As String = row("Role").ToString().Trim().ToUpper()
-            If role = "E" Then
+            If MoteurRepartition.IsEditeur(role) Then
                 Dim desig As String = row("Designation").ToString().Trim()
                 If Not String.IsNullOrEmpty(desig) Then
                     If Not cbDeclaration.Items.Contains(desig) Then cbDeclaration.Items.Add(desig)
@@ -448,7 +470,7 @@ Public Class JsonEditorForm
     ' CHARGEMENT XLSX LOCAL
     ' ─────────────────────────────────────────────────────────────
     Private Sub ChargerGoogleSheet()
-        Dim localPath As String = PersonnesForm.ResolveXlsxPath()
+        Dim localPath As String = PersonnesForm.DefaultXlsxPath
         Try
             If File.Exists(localPath) Then
                 lblStatut.Text = "Chargement de la base de données..."
@@ -497,7 +519,7 @@ Public Class JsonEditorForm
 
 
     Private Sub BtnGererFiches_Click(sender As Object, e As EventArgs)
-        Dim xlsxPath As String = PersonnesForm.ResolveXlsxPath()
+        Dim xlsxPath As String = PersonnesForm.DefaultXlsxPath
         Using f As New PersonnesForm(xlsxPath)
             f.ShowDialog()
         End Using
@@ -514,40 +536,11 @@ Public Class JsonEditorForm
     Private Sub SyncGridAvecSheet()
         ' Mapping XLSX colonne → DtDepotCreateur colonne
         ' Format : {colonne_xlsx, colonne_grille}
-        Dim mapPhy As (String, String)() = {
-            ("Pseudonyme", "Pseudonyme"),
-            ("Nom", "Nom"),
-            ("Prenom", "Prenom"),
-            ("Genre", "Genre"),
-            ("SocieteGestion", "SocieteGestion"),
-            ("Num de voie", "NumVoie"),
-            ("Type de voie", "TypeVoie"),
-            ("Nom de voie", "NomVoie"),
-            ("CP", "CP"),
-            ("Ville", "Ville"),
-            ("Mail", "Mail"),
-            ("Tel", "Tel"),
-            ("Date de naissance", "DateNaissance"),
-            ("Lieu de naissance", "LieuNaissance"),
-            ("N Secu", "NSecu")}
+        Dim mapPhyXls As String() = {"Pseudonyme", "Nom", "Prenom", "Genre", "SocieteGestion", "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Mail", "Tel", "Date de naissance", "Lieu de naissance", "N Secu"}
+        Dim mapPhyGrd As String() = {"Pseudonyme", "Nom", "Prenom", "Genre", "SocieteGestion", "NumVoie", "TypeVoie", "NomVoie", "CP", "Ville", "Mail", "Tel", "Nele", "Nea", "NSecu"}
 
-        Dim mapMor As (String, String)() = {
-            ("Designation", "Designation"),
-            ("SocieteGestion", "SocieteGestion"),
-            ("Forme Juridique", "FormeJuridique"),
-            ("Capital", "Capital"),
-            ("RCS", "RCS"),
-            ("Siren", "Siren"),
-            ("Num de voie", "NumVoie"),
-            ("Type de voie", "TypeVoie"),
-            ("Nom de voie", "NomVoie"),
-            ("CP", "CP"),
-            ("Ville", "Ville"),
-            ("Mail", "Mail"),
-            ("Tel", "Tel"),
-            ("Prenom representant", "PrenomRepresentant"),
-            ("Nom representant", "NomRepresentant"),
-            ("Fonction representant", "FonctionRepresentant")}
+        Dim mapMorXls As String() = {"Designation", "SocieteGestion", "Forme Juridique", "Capital", "RCS", "Siren", "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Mail", "Tel", "Prenom representant", "Nom representant", "Fonction representant"}
+        Dim mapMorGrd As String() = {"Designation", "SocieteGestion", "FormeJuridique", "Capital", "RCS", "Siren", "NumVoie", "TypeVoie", "NomVoie", "CP", "Ville", "Mail", "Tel", "PrenomRepresentant", "NomRepresentant", "FonctionRepresentant"}
 
         For Each gridRow As DataRow In DtDepotCreateur.Rows
             Dim tp As String = gridRow("Type").ToString()
@@ -568,12 +561,9 @@ Public Class JsonEditorForm
                 Next
                 If sheetRow IsNot Nothing Then
                     ' Copier toutes les colonnes mappées
-                    For Each mapping As (String, String) In mapPhy
-                        Dim xlsCol As String = mapping.Item1
-                        Dim gridCol As String = mapping.Item2
-                        If DtDepotCreateur.Columns.Contains(gridCol) Then
-                            Dim val As String = SafeStr(sheetRow, xlsCol)
-                            gridRow(gridCol) = val
+                    For k As Integer = 0 To mapPhyXls.Length - 1
+                        If DtDepotCreateur.Columns.Contains(mapPhyGrd(k)) Then
+                            gridRow(mapPhyGrd(k)) = SafeStr(sheetRow, mapPhyXls(k))
                         End If
                     Next
                     ' COAD / IPI — format spécial "COAD : X" ou "IPI : X"
@@ -606,12 +596,9 @@ Public Class JsonEditorForm
                 Next
                 If sheetRow IsNot Nothing Then
                     ' Copier toutes les colonnes mappées
-                    For Each mapping As (String, String) In mapMor
-                        Dim xlsCol As String = mapping.Item1
-                        Dim gridCol As String = mapping.Item2
-                        If DtDepotCreateur.Columns.Contains(gridCol) Then
-                            Dim val As String = SafeStr(sheetRow, xlsCol)
-                            gridRow(gridCol) = val
+                    For k As Integer = 0 To mapMorXls.Length - 1
+                        If DtDepotCreateur.Columns.Contains(mapMorGrd(k)) Then
+                            gridRow(mapMorGrd(k)) = SafeStr(sheetRow, mapMorXls(k))
                         End If
                     Next
                     ' COAD / IPI — format spécial
@@ -641,7 +628,7 @@ Public Class JsonEditorForm
             For Each row As DataRow In DtPersonPhy.Rows
                 Dim pseudo As String = SafeStr(row, "Pseudonyme")
                 Dim nom As String = SafeStr(row, "Nom")
-                Dim prenom As String = SafeStr(row, "Prenom")
+                Dim prenom As String = SafeStr(row, "Prénom")
                 If Not String.IsNullOrEmpty(pseudo) OrElse Not String.IsNullOrEmpty(nom & prenom) Then
                     items.Add($"{pseudo} / {nom} / {prenom}")
                 End If
@@ -680,11 +667,6 @@ Public Class JsonEditorForm
             AjouterPersonnePhysique(sel)
         End If
 
-        ' Recalcul automatique PH en cascade puis DEP/DR
-        Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
-        MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
-        MoteurRepartition.Calculer(DtDepotCreateur, params)
-
         UpdateLettrages()
         ApplyRowColors()
         RefreshDeclarationFormat()
@@ -693,7 +675,7 @@ Public Class JsonEditorForm
 
     ''' <summary>Relit le xlsx depuis le disque pour avoir les données fraîches.</summary>
     Private Sub RafraichirBDD()
-        Dim localPath As String = PersonnesForm.ResolveXlsxPath()
+        Dim localPath As String = PersonnesForm.DefaultXlsxPath
         If Not File.Exists(localPath) Then Return
         Try
             DtPersonPhy = LoadSheetXlsxLocal(localPath, "PERSONNEPHYSIQUE")
@@ -732,6 +714,7 @@ Public Class JsonEditorForm
                 End If
 
                 Dim nr As DataRow = DtDepotCreateur.NewRow()
+                nr("Id") = SafeStr(foundRow, "Id")
                 nr("Type") = "Moral"
                 nr("Designation") = designation
                 nr("Role") = "E"
@@ -772,7 +755,7 @@ Public Class JsonEditorForm
 
     Private Sub SauvegarderXlsxSilencieux()
         Try
-            Dim localPath As String = PersonnesForm.ResolveXlsxPath()
+            Dim localPath As String = PersonnesForm.DefaultXlsxPath
             If Not File.Exists(localPath) Then Return
             Using pkg As New ExcelPackage(New FileInfo(localPath))
                 Dim existing = pkg.Workbook.Worksheets("PERSONNEPHYSIQUE")
@@ -820,7 +803,7 @@ Public Class JsonEditorForm
 
         ' Rôle
         Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing, cbGenre.SelectedItem.ToString(), cbGenre.Text)
-        Dim role As String = SafeStr(foundRow, "Role")
+        Dim role As String = SafeStr(foundRow, "Rôle")
         role = AjusterRole(role, genre)
 
         If String.IsNullOrEmpty(role) Then
@@ -832,8 +815,8 @@ Public Class JsonEditorForm
         End If
 
         Dim nr As DataRow = DtDepotCreateur.NewRow()
-        nr("Type") = "Physique"
         nr("Id") = SafeStr(foundRow, "Id")
+        nr("Type") = "Physique"
         nr("Designation") = BuildDesignation(foundRow)
         nr("Pseudonyme") = SafeStr(foundRow, "Pseudonyme")
         nr("Nom") = SafeStr(foundRow, "Nom")
@@ -878,22 +861,23 @@ Public Class JsonEditorForm
                 End If
             Next
 
-            ' Ajouter chaque éditeur avec sa part relative (% dans le groupe éditeurs)
+            ' Ajouter chaque éditeur avec sa part calculée
             For Each eid As String In editeurIds
-                Dim partPct As Double = partsExplicites(eid)
-                AjouterEditeurParDefaut(eid, nr, partPct)
+                Dim quotePartCoed As Double = partsExplicites(eid) / 100.0
+                AjouterEditeurParDefaut(eid, nr, quotePartCoed)
             Next
         Else
             ' Demander EAC si déjà un éditeur
-            If DtDepotCreateur.AsEnumerable().Any(Function(r) r("Role").ToString() = "E") Then
+            If DtDepotCreateur.AsEnumerable().Any(Function(r) MoteurRepartition.IsEditeur(r("Role").ToString())) Then
                 If MessageBox.Show("Voulez-vous être Éditeur À Compte d'Auteur (EAC) ?",
                                    "EAC ?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
                     Dim nrEAC As DataRow = DtDepotCreateur.NewRow()
+                    nrEAC("Id") = nr("Id")
                     nrEAC("Type") = "Physique"
                     nrEAC("Designation") = nr("Designation").ToString() & " (EAC)"
                     nrEAC("Nom") = nr("Nom")
                     nrEAC("Prenom") = nr("Prenom")
-                    nrEAC("Role") = "E"
+                    nrEAC("Role") = "AEC"
                     nrEAC("Lettrage") = nr("Lettrage")
                     nrEAC("SocieteGestion") = nr("SocieteGestion")
                     nrEAC("Signataire") = True
@@ -905,23 +889,25 @@ Public Class JsonEditorForm
     End Sub
 
     ''' <summary>
-    ''' Ajoute un éditeur lié à un créateur dans la grille.
-    ''' partPct = part % de cet éditeur dans la part éditeur du créateur (ex: 60.0 pour 60%).
-    ''' Le PH définitif est recalculé par RecalculerPHApresAjout après l'ajout.
+    ''' Ajoute un éditeur lié à un AC dans la grille.
+    ''' quotePartCoed = fraction de la part AC attribuée à cet éditeur (ex: 0.6 pour 60%).
+    ''' PH de l'éditeur = PH de l'AC * quotePartCoed.
     ''' </summary>
     Private Sub AjouterEditeurParDefaut(editeurId As String, creaRow As DataRow,
-                                        Optional partPct As Double = 0.0)
-        ' PH éditeur = partPct (sera recalibré par RecalculerPHApresAjout)
-        ' On stocke partPct comme valeur provisoire pour conserver les proportions relatives
-        Dim phStr As String = If(partPct > 0, partPct.ToString("0.##", Globalization.CultureInfo.InvariantCulture), "0")
+                                        Optional quotePartCoed As Double = 1.0)
+        ' PH provisoire = quote-part relative (ex: 0.6 pour 60% du groupe éditeurs)
+        ' RecalculerPHApresAjout du moteur recalibrera ce poids sur la vraie part créateur
+        Dim phProv As Double = Math.Round(quotePartCoed * 100.0, 4)
+        Dim phStr As String = phProv.ToString(Globalization.CultureInfo.InvariantCulture)
 
         If editeurId = "EAC" Then
             Dim nrEAC2 As DataRow = DtDepotCreateur.NewRow()
+            nrEAC2("Id") = creaRow("Id")
             nrEAC2("Type") = "Physique"
             nrEAC2("Designation") = creaRow("Designation").ToString() & " (EAC)"
             nrEAC2("Nom") = creaRow("Nom")
             nrEAC2("Prenom") = creaRow("Prenom")
-            nrEAC2("Role") = "E"
+            nrEAC2("Role") = "AEC"
             nrEAC2("Lettrage") = creaRow("Lettrage")
             nrEAC2("PH") = phStr
             nrEAC2("SocieteGestion") = creaRow("SocieteGestion")
@@ -959,42 +945,10 @@ Public Class JsonEditorForm
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
-    ' CALCUL DES POURCENTAGES — MOTEUR REPARTITION
+    ' CALCUL DES POURCENTAGES
     ' ─────────────────────────────────────────────────────────────
-    Private Sub BtnCalculer_Click(sender As Object, e As EventArgs)
-        Try
-            AppelerMoteur()
-            UpdateLettrages()
-            dgv.Refresh()
-            lblStatut.Text = "Pourcentages calculés."
-        Catch ex As Exception
-            MessageBox.Show($"Erreur calcul : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
-
-    ''' <summary>Recalcul automatique quand la valeur PH change dans la grille.</summary>
-    Private Sub Dgv_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs)
-        If e.RowIndex < 0 Then Return
-        ' Déclencher uniquement sur la colonne PH
-        If dgv.Columns(e.ColumnIndex).Name = "PH" Then
-            AppelerMoteur()
-            dgv.Refresh()
-        End If
-    End Sub
-
-    ''' <summary>Recalcul automatique quand on coche/décoche Inégalitaire.</summary>
-    Private Sub CbInegalitaire_CheckedChanged(sender As Object, e As EventArgs)
-        AppelerMoteur()
-        dgv.Refresh()
-    End Sub
-
-    ''' <summary>
-    ''' Construit les paramètres de l'œuvre depuis les contrôles UI.
-    ''' </summary>
     Private Function GetParamsOeuvre() As MoteurRepartition.ParamsOeuvre
         Dim p As New MoteurRepartition.ParamsOeuvre()
-
-        ' Type d'œuvre selon genre
         Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing,
                                   cbGenre.SelectedItem.ToString(), cbGenre.Text).ToLower()
         If genre.Contains("texte") OrElse genre.Contains("chronique") OrElse
@@ -1006,33 +960,75 @@ Public Class JsonEditorForm
         Else
             p.TypeOeuvre = MoteurRepartition.TypeOeuvre.ParolesEtMusique
         End If
-
-        ' Éditée = au moins un éditeur dans la grille
-        p.EstEditee = DtDepotCreateur.AsEnumerable().Any(Function(r) r("Role").ToString() = "E")
-
-        ' Domaine public
-        p.EstDomainePublic = False  ' TODO : ajouter checkbox si besoin
-
-        ' Exception film/symphonique
+        p.EstEditee = DtDepotCreateur.AsEnumerable().Any(Function(r) MoteurRepartition.IsEditeur(r("Role").ToString()))
+        p.EstDomainePublic = False
         p.EstFilmOuSymphonique = genre.Contains("film") OrElse genre.Contains("symphonique")
-
-        ' Inégalitaire
         p.Inegalitaire = cbInegalitaire.Checked
-
         Return p
     End Function
 
-    ''' <summary>
-    ''' Point d'entrée unique pour déclencher le moteur.
-    ''' Appelé après chaque ajout, suppression, changement PH ou Inégalitaire.
-    ''' </summary>
     Private Sub AppelerMoteur()
         Try
             Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
+            MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
             MoteurRepartition.Calculer(DtDepotCreateur, params)
         Catch ex As Exception
             lblStatut.Text = "Erreur moteur : " & ex.Message
         End Try
+    End Sub
+
+    Private Sub BtnCalculer_Click(sender As Object, e As EventArgs)
+        Try
+            CalculerPourcentages()
+            UpdateLettrages()
+            dgv.Refresh()
+            lblStatut.Text = "Pourcentages calculés."
+        Catch ex As Exception
+            MessageBox.Show($"Erreur calcul : {ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub CalculerPourcentages()
+        Dim rows = DtDepotCreateur.AsEnumerable().ToList()
+        Dim countA As Integer = rows.Where(Function(r) r("Role").ToString() = "A").Count()
+        Dim countC As Integer = rows.Where(Function(r) r("Role").ToString() = "C").Count()
+        Dim countE As Integer = rows.Where(Function(r) MoteurRepartition.IsEditeur(r("Role").ToString())).Count()
+        Dim inegal As Boolean = cbInegalitaire.Checked
+
+        For Each row As DataRow In rows
+            Dim role As String = row("Role").ToString()
+            Dim ph As Decimal = 0
+            Decimal.TryParse(row("PH").ToString().Replace(",", "."),
+                Globalization.NumberStyles.Any,
+                Globalization.CultureInfo.InvariantCulture, ph)
+
+            Dim de As Decimal = 0
+            Dim dr As Decimal = 0
+
+            If Not inegal Then
+                ' Égalitaire
+                If countE > 0 Then
+                    If countA > 0 AndAlso countC > 0 Then
+                        If role = "A" Then de = Math.Round(100D / 3 / countA, 4) : dr = Math.Round(100D / 3 / countA, 4)
+                        If role = "C" Then de = Math.Round(100D / 3 / countC, 4) : dr = Math.Round(100D / 3 / countC, 4)
+                        If MoteurRepartition.IsEditeur(role) Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(100D / 3 / countE, 4)
+                    ElseIf countA > 0 Then
+                        If role = "A" Then de = Math.Round(200D / 3 / countA, 4) : dr = Math.Round(50D / countA, 4)
+                        If MoteurRepartition.IsEditeur(role) Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(50D / countE, 4)
+                    ElseIf countC > 0 Then
+                        If role = "C" Then de = Math.Round(200D / 3 / countC, 4) : dr = Math.Round(50D / countC, 4)
+                        If MoteurRepartition.IsEditeur(role) Then de = Math.Round(100D / 3 / countE, 4) : dr = Math.Round(50D / countE, 4)
+                    End If
+                Else
+                    If role = "A" Then de = Math.Round(100D / countA, 4) : dr = de
+                    If role = "C" Then de = Math.Round(100D / countC, 4) : dr = de
+                End If
+            End If
+            ' Inégalitaire : laisser l'utilisateur saisir PH manuellement pour l'instant
+
+            row("DE") = de.ToString(Globalization.CultureInfo.InvariantCulture)
+            row("DR") = dr.ToString(Globalization.CultureInfo.InvariantCulture)
+        Next
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -1210,7 +1206,7 @@ Public Class JsonEditorForm
                             End Function)
                     End If
                     ' Marquer si Id inconnu (personne supprimée ou non encore dans XLSX)
-                    nr("_Orphelin") = (phyRow Is Nothing AndAlso Not String.IsNullOrEmpty(idJson))
+                    nr("_Orphelin") = (phyRow Is Nothing)
                     If phyRow IsNot Nothing Then
                         ' Réenrichir adresse, contact, identité civile
                         nr("Pseudonyme") = SafeStr(phyRow, "Pseudonyme")
@@ -1228,7 +1224,9 @@ Public Class JsonEditorForm
                         nr("Tel") = SafeStr(phyRow, "Tel")
                         nr("COAD_IPI") = GetCOADIPI(phyRow)
                         ' Recalculer Designation avec les données fraîches
-                        nr("Designation") = BuildDesignation(phyRow)
+                        Dim desigBuilt As String = BuildDesignation(phyRow)
+                        If nr("Role").ToString().Trim().ToUpper() = "AEC" Then desigBuilt &= " (EAC)"
+                        nr("Designation") = desigBuilt
                     End If
                 ElseIf ayant.Identite.Type = "Moral" AndAlso DtPersonMor IsNot Nothing Then
                     Dim morRow As DataRow = Nothing
@@ -1240,7 +1238,7 @@ Public Class JsonEditorForm
                         morRow = DtPersonMor.AsEnumerable().FirstOrDefault(
                             Function(r) SafeStr(r, "Designation").Trim().ToUpper() = desigJson.ToUpper())
                     End If
-                    nr("_Orphelin") = (morRow Is Nothing AndAlso Not String.IsNullOrEmpty(idJson))
+                    nr("_Orphelin") = (morRow Is Nothing)
                     If morRow IsNot Nothing Then
                         ' Réenrichir infos légales et contact
                         nr("FormeJuridique") = SafeStr(morRow, "Forme Juridique")
@@ -1258,6 +1256,7 @@ Public Class JsonEditorForm
                         nr("Mail") = SafeStr(morRow, "Mail")
                         nr("Tel") = SafeStr(morRow, "Tel")
                         nr("COAD_IPI") = GetCOADIPI(morRow)
+                        nr("Designation") = SafeStr(morRow, "Designation")
                     End If
                 End If
 
@@ -1265,6 +1264,7 @@ Public Class JsonEditorForm
             Next
 
             dgv.Refresh()
+            AppelerMoteur()
             lblStatut.Text = "JSON chargé : " & Path.GetFileName(filePath) & " — données enrichies depuis BDD"
             RefreshDeclarationFormat()
         Catch ex As Exception
@@ -1280,7 +1280,7 @@ Public Class JsonEditorForm
         Dim colName As String = dgv.Columns(e.ColumnIndex).Name
         If colName = "Role" Then
             Dim val As String = e.FormattedValue.ToString().Trim().ToUpper()
-            Dim valid As String() = {"A", "C", "AR", "AD", "E"}
+            Dim valid As String() = {"A", "C", "AR", "AD", "E", "AEC"}
             If Not valid.Contains(val) Then
                 e.Cancel = True
                 MessageBox.Show("Rôles valides : A, C, AR, AD, E", "Valeur invalide",
@@ -1336,21 +1336,14 @@ Public Class JsonEditorForm
         If role = "A" OrElse role = "C" OrElse role = "AD" OrElse role = "AR" Then
             For i As Integer = DtDepotCreateur.Rows.Count - 1 To 0 Step -1
                 Dim r As DataRow = DtDepotCreateur.Rows(i)
-                If r("Lettrage").ToString() = lettrage AndAlso r("Role").ToString() = "E" Then
+                If r("Lettrage").ToString() = lettrage AndAlso MoteurRepartition.IsEditeur(r("Role").ToString()) Then
                     DtDepotCreateur.Rows.Remove(r)
                 End If
             Next
         End If
 
         dgv.Rows.Remove(selRow)
-
-        ' Recalcul automatique PH en cascade puis DEP/DR
-        Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
-        MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
-        MoteurRepartition.Calculer(DtDepotCreateur, params)
-
         UpdateLettrages()
-        ApplyRowColors()
         RefreshDeclarationFormat()
         dgv.Refresh()
     End Sub
@@ -1406,6 +1399,81 @@ Public Class JsonEditorForm
         ApplyRowColors()
         RefreshDeclarationFormat()
         _dragRowIndex = -1
+    End Sub
+
+    ' ─────────────────────────────────────────────────────────────
+    ' RECHERCHE LIVE
+    ' ─────────────────────────────────────────────────────────────
+    Private _watermark As Boolean = True
+
+    Private Sub TxtRecherche_GotFocus(sender As Object, e As EventArgs)
+        If _watermark Then
+            txtRecherche.Text = ""
+            txtRecherche.ForeColor = Color.Black
+            _watermark = False
+        End If
+    End Sub
+
+    Private Sub TxtRecherche_LostFocus(sender As Object, e As EventArgs)
+        If String.IsNullOrWhiteSpace(txtRecherche.Text) Then
+            txtRecherche.Text = "Nom, prénom, pseudonyme..."
+            txtRecherche.ForeColor = Color.Gray
+            _watermark = True
+            lstResultats.Visible = False
+        End If
+    End Sub
+
+    Private Sub TxtRecherche_Changed(sender As Object, e As EventArgs)
+        If _watermark Then Return
+        Dim terme As String = txtRecherche.Text.Trim().ToUpper()
+        lstResultats.Items.Clear()
+        If terme.Length = 0 Then lstResultats.Visible = False : Return
+
+        If DtPersonPhy IsNot Nothing Then
+            For Each r As DataRow In DtPersonPhy.Rows
+                Dim nom As String = SafeStr(r, "Nom").ToUpper()
+                Dim prenom As String = SafeStr(r, "Prenom").ToUpper()
+                Dim pseudo As String = SafeStr(r, "Pseudonyme").ToUpper()
+                If nom.Contains(terme) OrElse prenom.Contains(terme) OrElse pseudo.Contains(terme) Then
+                    Dim p As String = SafeStr(r, "Pseudonyme")
+                    Dim n As String = SafeStr(r, "Nom")
+                    Dim pn As String = SafeStr(r, "Prenom")
+                    lstResultats.Items.Add($"{p} / {n} / {pn}")
+                End If
+            Next
+        End If
+        If DtPersonMor IsNot Nothing Then
+            For Each r As DataRow In DtPersonMor.Rows
+                Dim desig As String = SafeStr(r, "Designation").ToUpper()
+                If desig.Contains(terme) Then
+                    lstResultats.Items.Add("(Morale) " & SafeStr(r, "Designation"))
+                End If
+            Next
+        End If
+        lstResultats.Visible = lstResultats.Items.Count > 0
+    End Sub
+
+    Private Sub LstResultats_DoubleClick(sender As Object, e As EventArgs)
+        AjouterDepuisListe()
+    End Sub
+
+    Private Sub AjouterDepuisListe()
+        If lstResultats.SelectedItem Is Nothing Then Return
+        Dim sel As String = lstResultats.SelectedItem.ToString()
+        RafraichirBDD()
+        If sel.StartsWith("(Morale) ") Then
+            AjouterPersonneMorale(sel.Substring(9).Trim())
+        Else
+            AjouterPersonnePhysique(sel)
+        End If
+        AppelerMoteur()
+        UpdateLettrages()
+        ApplyRowColors()
+        RefreshDeclarationFormat()
+        lstResultats.Visible = False
+        txtRecherche.Text = ""
+        _watermark = False
+        dgv.Refresh()
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -1500,7 +1568,7 @@ Public Class JsonEditorForm
 
     Private Function BuildDesignation(row As DataRow) As String
         Dim nom As String = SafeStr(row, "Nom")
-        Dim prenom As String = SafeStr(row, "Prenom")
+        Dim prenom As String = SafeStr(row, "Prénom")
         Dim pseudo As String = SafeStr(row, "Pseudonyme")
         Return $"{nom} {prenom}".Trim() & If(String.IsNullOrEmpty(pseudo), "", $" / {pseudo}")
     End Function
@@ -1513,7 +1581,7 @@ Public Class JsonEditorForm
         dest("Ville") = SafeStr(source, "Ville")
         dest("Pays") = SafeStr(source, "Pays", "FRANCE")
         dest("Mail") = SafeStr(source, "Mail")
-        dest("Tel") = SafeStr(source, "Tel")
+        dest("Tel") = SafeStr(source, "Tél")
     End Sub
 
     Private Sub CopierInfosMorale(dest As DataRow, source As DataRow)
@@ -1659,51 +1727,29 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille) — résolution par nom de colonne
-            Dim idxPseudo As Integer = Array.IndexOf(cols, "Pseudonyme")
-            Dim idxNom As Integer = Array.IndexOf(cols, "Nom")
-            Dim idxPrenom As Integer = Array.IndexOf(cols, "Prenom")
-            Dim idxGenre As Integer = Array.IndexOf(cols, "Genre")
-            Dim idxRole As Integer = Array.IndexOf(cols, "Role")
-            Dim idxCOAD As Integer = Array.IndexOf(cols, "COAD")
-            Dim idxIPI As Integer = Array.IndexOf(cols, "IPI")
-            Dim idxNumV As Integer = Array.IndexOf(cols, "Num de voie")
-            Dim idxTypeV As Integer = Array.IndexOf(cols, "Type de voie")
-            Dim idxNomV As Integer = Array.IndexOf(cols, "Nom de voie")
-            Dim idxCP As Integer = Array.IndexOf(cols, "CP")
-            Dim idxVille As Integer = Array.IndexOf(cols, "Ville")
-            Dim idxMail As Integer = Array.IndexOf(cols, "Mail")
-            Dim idxTel As Integer = Array.IndexOf(cols, "Tel")
-            Dim idxId As Integer = Array.IndexOf(cols, "Id")
-
-            Dim pseudo2 As String = If(idxPseudo >= 0, res(idxPseudo).Trim(), "")
-            Dim nom2 As String = If(idxNom >= 0, res(idxNom).Trim(), "")
-            Dim prenom2 As String = If(idxPrenom >= 0, res(idxPrenom).Trim(), "")
-
-            If idxPseudo >= 0 Then row("Pseudonyme") = pseudo2
-            If idxNom >= 0 Then row("Nom") = nom2
-            If idxPrenom >= 0 Then row("Prenom") = prenom2
-            If idxGenre >= 0 Then row("Genre") = res(idxGenre)
-            If idxRole >= 0 Then row("Role") = res(idxRole)
-            If srcRow IsNot Nothing Then row("Id") = SafeStr(srcRow, "Id")
-
-            Dim coad As String = If(idxCOAD >= 0, res(idxCOAD).Trim(), "")
-            Dim ipi As String = If(idxIPI >= 0, res(idxIPI).Trim(), "")
+            ' Mettre à jour DtDepotCreateur (grille)
+            row("Pseudonyme") = res(0)
+            row("Nom") = res(1)
+            row("Prenom") = res(2)
+            row("Genre") = res(3)
+            row("Role") = res(5)
+            Dim coad As String = res(6).Trim()
+            Dim ipi As String = res(7).Trim()
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-
-            If idxNumV >= 0 Then row("NumVoie") = res(idxNumV)
-            If idxTypeV >= 0 Then row("TypeVoie") = res(idxTypeV)
-            If idxNomV >= 0 Then row("NomVoie") = res(idxNomV)
-            If idxCP >= 0 Then row("CP") = res(idxCP)
-            If idxVille >= 0 Then row("Ville") = res(idxVille)
-            If idxMail >= 0 Then row("Mail") = res(idxMail)
-            If idxTel >= 0 Then row("Tel") = res(idxTel)
-
-            ' Reconstruire Designation
+            row("NumVoie") = res(9)
+            row("TypeVoie") = res(10)
+            row("NomVoie") = res(11)
+            row("CP") = res(12)
+            row("Ville") = res(13)
+            row("Mail") = res(14)
+            row("Tel") = res(15)
+            Dim nom2 As String = res(1).Trim()
+            Dim prenom2 As String = res(2).Trim()
+            Dim pseudo2 As String = res(0).Trim()
             If Not String.IsNullOrEmpty(pseudo2) Then
                 row("Designation") = nom2 & " " & prenom2 & " / " & pseudo2
             Else
@@ -1780,51 +1826,29 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille) — résolution par nom de colonne
-            Dim idxDesig As Integer = Array.IndexOf(cols, "Designation")
-            Dim idxIdM As Integer = Array.IndexOf(cols, "Id")
-            Dim idxCOADm As Integer = Array.IndexOf(cols, "COAD")
-            Dim idxIPIm As Integer = Array.IndexOf(cols, "IPI")
-            Dim idxFJ As Integer = Array.IndexOf(cols, "Forme Juridique")
-            Dim idxCap As Integer = Array.IndexOf(cols, "Capital")
-            Dim idxRCS As Integer = Array.IndexOf(cols, "RCS")
-            Dim idxSiren As Integer = Array.IndexOf(cols, "Siren")
-            Dim idxNumVm As Integer = Array.IndexOf(cols, "Num de voie")
-            Dim idxTypeVm As Integer = Array.IndexOf(cols, "Type de voie")
-            Dim idxNomVm As Integer = Array.IndexOf(cols, "Nom de voie")
-            Dim idxCPm As Integer = Array.IndexOf(cols, "CP")
-            Dim idxVillem As Integer = Array.IndexOf(cols, "Ville")
-            Dim idxPrenR As Integer = Array.IndexOf(cols, "Prenom representant")
-            Dim idxNomR As Integer = Array.IndexOf(cols, "Nom representant")
-            Dim idxFoncR As Integer = Array.IndexOf(cols, "Fonction representant")
-            Dim idxMailm As Integer = Array.IndexOf(cols, "Mail")
-            Dim idxTelm As Integer = Array.IndexOf(cols, "Tel")
-
-            If idxDesig >= 0 Then row("Designation") = res(idxDesig)
-            If srcRow IsNot Nothing Then row("Id") = SafeStr(srcRow, "Id")
-
-            Dim coad As String = If(idxCOADm >= 0, res(idxCOADm).Trim(), "")
-            Dim ipi As String = If(idxIPIm >= 0, res(idxIPIm).Trim(), "")
+            ' Mettre à jour DtDepotCreateur (grille)
+            row("Designation") = res(0)
+            Dim coad As String = res(1).Trim()
+            Dim ipi As String = res(2).Trim()
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-
-            If idxFJ >= 0 Then row("FormeJuridique") = res(idxFJ)
-            If idxCap >= 0 Then row("Capital") = res(idxCap)
-            If idxRCS >= 0 Then row("RCS") = res(idxRCS)
-            If idxSiren >= 0 Then row("Siren") = res(idxSiren)
-            If idxNumVm >= 0 Then row("NumVoie") = res(idxNumVm)
-            If idxTypeVm >= 0 Then row("TypeVoie") = res(idxTypeVm)
-            If idxNomVm >= 0 Then row("NomVoie") = res(idxNomVm)
-            If idxCPm >= 0 Then row("CP") = res(idxCPm)
-            If idxVillem >= 0 Then row("Ville") = res(idxVillem)
-            If idxPrenR >= 0 Then row("PrenomRepresentant") = res(idxPrenR)
-            If idxNomR >= 0 Then row("NomRepresentant") = res(idxNomR)
-            If idxFoncR >= 0 Then row("FonctionRepresentant") = res(idxFoncR)
-            If idxMailm >= 0 Then row("Mail") = res(idxMailm)
-            If idxTelm >= 0 Then row("Tel") = res(idxTelm)
+            row("FormeJuridique") = res(3)
+            row("Capital") = res(4)
+            row("RCS") = res(5)
+            row("Siren") = res(6)
+            row("NumVoie") = res(7)
+            row("TypeVoie") = res(8)
+            row("NomVoie") = res(9)
+            row("CP") = res(10)
+            row("Ville") = res(11)
+            row("PrenomRepresentant") = res(12)
+            row("NomRepresentant") = res(13)
+            row("FonctionRepresentant") = res(14)
+            row("Mail") = res(15)
+            row("Tel") = res(16)
             dgv.Refresh()
             ApplyRowColors()
             lblStatut.Text = "Personne morale mise à jour."
@@ -1832,6 +1856,33 @@ Public Class JsonEditorForm
     End Sub
 
 
+
+    ''' <summary>Force la validation immédiate de la cellule PH dès qu'elle est modifiée.</summary>
+    Private Sub Dgv_CurrentCellDirtyStateChanged(sender As Object, e As EventArgs)
+        If dgv.IsCurrentCellDirty Then
+            If dgv.CurrentCell IsNot Nothing AndAlso
+               dgv.Columns(dgv.CurrentCell.ColumnIndex).Name = "PH" Then
+                dgv.CommitEdit(DataGridViewDataErrorContexts.Commit)
+            End If
+        End If
+    End Sub
+
+    ''' <summary>Recalcul automatique DEP/DR quand PH modifié dans la grille.</summary>
+    Private Sub Dgv_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs)
+        If e.RowIndex < 0 Then Return
+        If dgv.Columns(e.ColumnIndex).Name = "PH" Then
+            AppelerMoteur()
+            ApplyRowColors()
+            dgv.Refresh()
+        End If
+    End Sub
+
+    ''' <summary>Recalcul automatique quand on coche/décoche Inégalitaire.</summary>
+    Private Sub CbInegalitaire_CheckedChanged(sender As Object, e As EventArgs)
+        AppelerMoteur()
+        ApplyRowColors()
+        dgv.Refresh()
+    End Sub
 
 End Class
 
