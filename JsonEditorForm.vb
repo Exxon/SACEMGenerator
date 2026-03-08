@@ -59,6 +59,7 @@ Public Class JsonEditorForm
     Private WithEvents cmsGrille As ContextMenuStrip
     Private WithEvents mnuSupprimer As ToolStripMenuItem
     Private _dragRowIndex As Integer = -1
+    Private _totalAvantPH As Double = 0.0  ' Total catégorie avant modif manuelle PH
 
     ' ─────────────────────────────────────────────────────────────
     ' CONSTRUCTEUR
@@ -1293,6 +1294,25 @@ Public Class JsonEditorForm
         Dim editable As String() = {"Role", "Lettrage", "PH", "SocieteGestion", "Signataire", "Managelic", "Managesub", "COAD_IPI"}
         If Not editable.Contains(dgv.Columns(e.ColumnIndex).Name) Then
             e.Cancel = True
+            Return
+        End If
+        ' Capturer le total de la catégorie avant modification PH
+        If dgv.Columns(e.ColumnIndex).Name = "PH" AndAlso e.RowIndex >= 0 Then
+            Dim row As DataRow = DtDepotCreateur.Rows(e.RowIndex)
+            Dim role As String = row("Role").ToString().Trim().ToUpper()
+            Dim lettrage As String = row("Lettrage").ToString().Trim()
+            If role = "A" OrElse role = "C" Then
+                _totalAvantPH = DtDepotCreateur.AsEnumerable().
+                    Where(Function(r) r("Role").ToString().Trim().ToUpper() = role).
+                    Sum(Function(r) MoteurRepartition.ParsePH(r))
+            ElseIf MoteurRepartition.IsEditeur(role) Then
+                _totalAvantPH = DtDepotCreateur.AsEnumerable().
+                    Where(Function(r) MoteurRepartition.IsEditeur(r("Role").ToString()) AndAlso
+                                      r("Lettrage").ToString().Trim() = lettrage).
+                    Sum(Function(r) MoteurRepartition.ParsePH(r))
+            Else
+                _totalAvantPH = 0
+            End If
         End If
     End Sub
 
@@ -1657,22 +1677,30 @@ Public Class JsonEditorForm
     End Sub
 
     Private Sub OuvrirFichePhysique(row As DataRow)
-        ' Retrouver la ligne complete dans DtPersonPhy (source = XLSX)
+        ' Retrouver la ligne complete dans DtPersonPhy — par Id en priorité
         Dim srcRow As DataRow = Nothing
         If DtPersonPhy IsNot Nothing Then
-            Dim nom As String = row("Nom").ToString().Trim()
-            Dim prenom As String = row("Prenom").ToString().Trim()
-            Dim pseudo As String = row("Pseudonyme").ToString().Trim()
-            For Each r As DataRow In DtPersonPhy.Rows
-                Dim rNom As String = SafeStr(r, "Nom").Trim()
-                Dim rPrenom As String = SafeStr(r, "Prenom").Trim()
-                Dim rPseudo As String = SafeStr(r, "Pseudonyme").Trim()
-                If (Not String.IsNullOrEmpty(nom) AndAlso rNom = nom AndAlso rPrenom = prenom) OrElse
-                   (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
-                    srcRow = r
-                    Exit For
-                End If
-            Next
+            Dim idRow As String = row("Id").ToString().Trim()
+            If Not String.IsNullOrEmpty(idRow) Then
+                srcRow = DtPersonPhy.AsEnumerable().FirstOrDefault(
+                    Function(r) SafeStr(r, "Id").Trim().ToUpper() = idRow.ToUpper())
+            End If
+            If srcRow Is Nothing Then
+                ' Fallback nom+prenom ou pseudonyme
+                Dim nom As String = row("Nom").ToString().Trim()
+                Dim prenom As String = row("Prenom").ToString().Trim()
+                Dim pseudo As String = row("Pseudonyme").ToString().Trim()
+                For Each r As DataRow In DtPersonPhy.Rows
+                    Dim rNom As String = SafeStr(r, "Nom").Trim()
+                    Dim rPrenom As String = SafeStr(r, "Prenom").Trim()
+                    Dim rPseudo As String = SafeStr(r, "Pseudonyme").Trim()
+                    If (Not String.IsNullOrEmpty(nom) AndAlso rNom = nom AndAlso rPrenom = prenom) OrElse
+                       (Not String.IsNullOrEmpty(pseudo) AndAlso rPseudo = pseudo) Then
+                        srcRow = r
+                        Exit For
+                    End If
+                Next
+            End If
         End If
 
         ' Construire le tableau de valeurs depuis srcRow (XLSX) ou row (grille) en fallback
@@ -1727,34 +1755,60 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille)
-            row("Pseudonyme") = res(0)
-            row("Nom") = res(1)
-            row("Prenom") = res(2)
-            row("Genre") = res(3)
-            row("Role") = res(5)
-            Dim coad As String = res(6).Trim()
-            Dim ipi As String = res(7).Trim()
+            ' Mettre à jour DtDepotCreateur — indices résolus via ColsPhy
+            Dim iId As Integer = Array.IndexOf(cols, "Id")
+            Dim iPseudo As Integer = Array.IndexOf(cols, "Pseudonyme")
+            Dim iNom As Integer = Array.IndexOf(cols, "Nom")
+            Dim iPrenom As Integer = Array.IndexOf(cols, "Prenom")
+            Dim iGenre As Integer = Array.IndexOf(cols, "Genre")
+            Dim iRole As Integer = Array.IndexOf(cols, "Role")
+            Dim iCOAD As Integer = Array.IndexOf(cols, "COAD")
+            Dim iIPI As Integer = Array.IndexOf(cols, "IPI")
+            Dim iSG As Integer = Array.IndexOf(cols, "SocieteGestion")
+            Dim iNumV As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim iTypV As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim iNomV As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim iCP As Integer = Array.IndexOf(cols, "CP")
+            Dim iVille As Integer = Array.IndexOf(cols, "Ville")
+            Dim iMail As Integer = Array.IndexOf(cols, "Mail")
+            Dim iTel As Integer = Array.IndexOf(cols, "Tel")
+
+            ' Ne pas écraser l'Id de la grille (AEC partage l'Id du créateur)
+            ' row("Id") inchangé
+            If iPseudo >= 0 Then row("Pseudonyme") = res(iPseudo)
+            If iNom >= 0 Then row("Nom") = res(iNom)
+            If iPrenom >= 0 Then row("Prenom") = res(iPrenom)
+            If iGenre >= 0 Then row("Genre") = res(iGenre)
+            If iRole >= 0 AndAlso row("Role").ToString().Trim().ToUpper() <> "AEC" Then
+                row("Role") = res(iRole)
+            End If
+            Dim coad As String = If(iCOAD >= 0, res(iCOAD).Trim(), "")
+            Dim ipi As String = If(iIPI >= 0, res(iIPI).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            row("NumVoie") = res(9)
-            row("TypeVoie") = res(10)
-            row("NomVoie") = res(11)
-            row("CP") = res(12)
-            row("Ville") = res(13)
-            row("Mail") = res(14)
-            row("Tel") = res(15)
-            Dim nom2 As String = res(1).Trim()
-            Dim prenom2 As String = res(2).Trim()
-            Dim pseudo2 As String = res(0).Trim()
-            If Not String.IsNullOrEmpty(pseudo2) Then
-                row("Designation") = nom2 & " " & prenom2 & " / " & pseudo2
-            Else
-                row("Designation") = (nom2 & " " & prenom2).Trim()
-            End If
+            If iSG >= 0 Then row("SocieteGestion") = res(iSG)
+            If iNumV >= 0 Then row("NumVoie") = res(iNumV)
+            If iTypV >= 0 Then row("TypeVoie") = res(iTypV)
+            If iNomV >= 0 Then row("NomVoie") = res(iNomV)
+            If iCP >= 0 Then row("CP") = res(iCP)
+            If iVille >= 0 Then row("Ville") = res(iVille)
+            If iMail >= 0 Then row("Mail") = res(iMail)
+            If iTel >= 0 Then row("Tel") = res(iTel)
+
+            ' Reconstruire Designation
+            Dim nom2 As String = If(iNom >= 0, res(iNom).Trim(), "")
+            Dim prenom2 As String = If(iPrenom >= 0, res(iPrenom).Trim(), "")
+            Dim pseudo2 As String = If(iPseudo >= 0, res(iPseudo).Trim(), "")
+            Dim desigBase As String = If(Not String.IsNullOrEmpty(pseudo2),
+                                         nom2 & " " & prenom2 & " / " & pseudo2,
+                                         (nom2 & " " & prenom2).Trim())
+            If row("Role").ToString().Trim().ToUpper() = "AEC" Then desigBase &= " (EAC)"
+            row("Designation") = desigBase
+
+            SauvegarderXlsxSilencieux()
             dgv.Refresh()
             ApplyRowColors()
             lblStatut.Text = "Personne physique mise à jour."
@@ -1762,16 +1816,24 @@ Public Class JsonEditorForm
     End Sub
 
     Private Sub OuvrirFicheMorale(row As DataRow)
-        ' Retrouver la ligne complete dans DtPersonMor (source = XLSX)
+        ' Retrouver la ligne complete dans DtPersonMor — par Id en priorité
         Dim srcRow As DataRow = Nothing
         If DtPersonMor IsNot Nothing Then
-            Dim desig As String = row("Designation").ToString().Trim().ToUpper()
-            For Each r As DataRow In DtPersonMor.Rows
-                If SafeStr(r, "Designation").Trim().ToUpper() = desig Then
-                    srcRow = r
-                    Exit For
-                End If
-            Next
+            Dim idRow As String = row("Id").ToString().Trim()
+            If Not String.IsNullOrEmpty(idRow) Then
+                srcRow = DtPersonMor.AsEnumerable().FirstOrDefault(
+                    Function(r) SafeStr(r, "Id").Trim().ToUpper() = idRow.ToUpper())
+            End If
+            If srcRow Is Nothing Then
+                ' Fallback par designation
+                Dim desig As String = row("Designation").ToString().Trim().ToUpper()
+                For Each r As DataRow In DtPersonMor.Rows
+                    If SafeStr(r, "Designation").Trim().ToUpper() = desig Then
+                        srcRow = r
+                        Exit For
+                    End If
+                Next
+            End If
         End If
 
         Dim cols() As String = PersonnesForm.ColsMor
@@ -1826,29 +1888,52 @@ Public Class JsonEditorForm
                 Next
             End If
 
-            ' Mettre à jour DtDepotCreateur (grille)
-            row("Designation") = res(0)
-            Dim coad As String = res(1).Trim()
-            Dim ipi As String = res(2).Trim()
+            ' Mettre à jour DtDepotCreateur — indices résolus via ColsMor
+            Dim iDesig As Integer = Array.IndexOf(cols, "Designation")
+            Dim iCOAD As Integer = Array.IndexOf(cols, "COAD")
+            Dim iIPI As Integer = Array.IndexOf(cols, "IPI")
+            Dim iFJ As Integer = Array.IndexOf(cols, "Forme Juridique")
+            Dim iCap As Integer = Array.IndexOf(cols, "Capital")
+            Dim iRCS As Integer = Array.IndexOf(cols, "RCS")
+            Dim iSiren As Integer = Array.IndexOf(cols, "Siren")
+            Dim iSG As Integer = Array.IndexOf(cols, "SocieteGestion")
+            Dim iNumV As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim iTypV As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim iNomV As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim iCP As Integer = Array.IndexOf(cols, "CP")
+            Dim iVille As Integer = Array.IndexOf(cols, "Ville")
+            Dim iPrenR As Integer = Array.IndexOf(cols, "Prenom representant")
+            Dim iNomR As Integer = Array.IndexOf(cols, "Nom representant")
+            Dim iFoncR As Integer = Array.IndexOf(cols, "Fonction representant")
+            Dim iMail As Integer = Array.IndexOf(cols, "Mail")
+            Dim iTel As Integer = Array.IndexOf(cols, "Tel")
+
+            ' Ne pas écraser l'Id de la grille
+            If iDesig >= 0 Then row("Designation") = res(iDesig)
+            Dim coad As String = If(iCOAD >= 0, res(iCOAD).Trim(), "")
+            Dim ipi As String = If(iIPI >= 0, res(iIPI).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            row("FormeJuridique") = res(3)
-            row("Capital") = res(4)
-            row("RCS") = res(5)
-            row("Siren") = res(6)
-            row("NumVoie") = res(7)
-            row("TypeVoie") = res(8)
-            row("NomVoie") = res(9)
-            row("CP") = res(10)
-            row("Ville") = res(11)
-            row("PrenomRepresentant") = res(12)
-            row("NomRepresentant") = res(13)
-            row("FonctionRepresentant") = res(14)
-            row("Mail") = res(15)
-            row("Tel") = res(16)
+            If iFJ >= 0 Then row("FormeJuridique") = res(iFJ)
+            If iCap >= 0 Then row("Capital") = res(iCap)
+            If iRCS >= 0 Then row("RCS") = res(iRCS)
+            If iSiren >= 0 Then row("Siren") = res(iSiren)
+            If iSG >= 0 Then row("SocieteGestion") = res(iSG)
+            If iNumV >= 0 Then row("NumVoie") = res(iNumV)
+            If iTypV >= 0 Then row("TypeVoie") = res(iTypV)
+            If iNomV >= 0 Then row("NomVoie") = res(iNomV)
+            If iCP >= 0 Then row("CP") = res(iCP)
+            If iVille >= 0 Then row("Ville") = res(iVille)
+            If iPrenR >= 0 Then row("PrenomRepresentant") = res(iPrenR)
+            If iNomR >= 0 Then row("NomRepresentant") = res(iNomR)
+            If iFoncR >= 0 Then row("FonctionRepresentant") = res(iFoncR)
+            If iMail >= 0 Then row("Mail") = res(iMail)
+            If iTel >= 0 Then row("Tel") = res(iTel)
+
+            SauvegarderXlsxSilencieux()
             dgv.Refresh()
             ApplyRowColors()
             lblStatut.Text = "Personne morale mise à jour."
@@ -1871,7 +1956,16 @@ Public Class JsonEditorForm
     Private Sub Dgv_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs)
         If e.RowIndex < 0 Then Return
         If dgv.Columns(e.ColumnIndex).Name = "PH" Then
-            AppelerMoteur()
+            Try
+                Dim row As DataRow = DtDepotCreateur.Rows(e.RowIndex)
+                Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
+                ' Rééquilibrer les PH de la catégorie selon la modif manuelle
+                MoteurRepartition.RééquilibrerCategorie(DtDepotCreateur, row, _totalAvantPH)
+                ' Recalculer DEP/DR
+                MoteurRepartition.Calculer(DtDepotCreateur, params)
+            Catch ex As Exception
+                lblStatut.Text = "Erreur recalcul PH : " & ex.Message
+            End Try
             ApplyRowColors()
             dgv.Refresh()
         End If
