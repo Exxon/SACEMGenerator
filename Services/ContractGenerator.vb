@@ -71,6 +71,9 @@ Public Class ContractGenerator
                 ' ÉTAPE 1 : Fusionner les runs fragmentés pour les balises
                 MergeFragmentedRuns(body)
 
+                ' ÉTAPE 1b : Normaliser les espaces dans les placeholders { xxx } → {xxx} et [ xxx ] → [xxx]
+                NormalizePlaceholderSpaces(body)
+
                 ' ÉTAPE 2 : Remplacer les balises simples [xxx]
                 For Each kvp In allBalises
                     Dim balise As String = $"[{kvp.Key}]"
@@ -121,6 +124,22 @@ Public Class ContractGenerator
     End Function
 
     ''' <summary>
+    ''' Normalise les espaces dans les placeholders : { auteurspart } → {auteurspart}, [ Titre ] → [Titre]
+    ''' </summary>
+    Private Sub NormalizePlaceholderSpaces(body As Body)
+        For Each textEl In body.Descendants(Of Text)().ToList()
+            If textEl.Text IsNot Nothing Then
+                Dim t As String = textEl.Text
+                ' { xxx } → {xxx}
+                t = Regex.Replace(t, "\{\s+([A-Za-z0-9_]+)\s+\}", "{$1}")
+                ' [ xxx ] → [xxx]
+                t = Regex.Replace(t, "\[\s+([A-Za-z0-9_/]+)\s+\]", "[$1]")
+                textEl.Text = t
+            End If
+        Next
+    End Sub
+
+    ''' <summary>
     ''' Fusionne les runs fragmentés qui contiennent des balises
     ''' Word peut fragmenter {auteurspart} en { + auteurspart + }
     ''' Cette méthode fusionne ces runs pour permettre le remplacement
@@ -146,7 +165,7 @@ Public Class ContractGenerator
         If Not (fullText.Contains("[") OrElse fullText.Contains("{")) Then Return
 
         ' Vérifier si une balise est fragmentée (présente dans fullText mais pas dans un seul run)
-        Dim balisePattern As New Regex("\{[A-Za-z0-9_]+\}|\[[A-Za-z0-9_/]+\]")
+        Dim balisePattern As New Regex("\{\s*[A-Za-z0-9_]+\s*\}|\[\s*[A-Za-z0-9_/]+\s*\]")
         Dim matches = balisePattern.Matches(fullText)
         
         Dim needsMerge As Boolean = False

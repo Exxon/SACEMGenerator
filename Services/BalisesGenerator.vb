@@ -193,8 +193,9 @@ Public Class BalisesGenerator
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-                If Not editeurs.Contains(ayant.Identite.Designation) Then
-                    editeurs.Add(ayant.Identite.Designation)
+                Dim desigE As String = If(ayant.Identite.Designation, "").Trim()
+                If Not String.IsNullOrEmpty(desigE) AndAlso Not editeurs.Contains(desigE) Then
+                    editeurs.Add(desigE)
                 End If
             End If
         Next
@@ -207,10 +208,13 @@ Public Class BalisesGenerator
         Dim editeursSansFormat As New List(Of String)
         For Each ayant In _data.AyantsDroit
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
-            If ayant.BDO.Role = "E" AndAlso ayant.Identite.Designation <> _data.Format Then
+            If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-                If Not editeursSansFormat.Contains(ayant.Identite.Designation) Then
-                    editeursSansFormat.Add(ayant.Identite.Designation)
+                Dim desigSF As String = If(ayant.Identite.Designation, "").Trim()
+                If String.IsNullOrEmpty(desigSF) Then Continue For
+                If desigSF = If(_data.Format, "") Then Continue For
+                If Not editeursSansFormat.Contains(desigSF) Then
+                    editeursSansFormat.Add(desigSF)
                 End If
             End If
         Next
@@ -226,8 +230,9 @@ Public Class BalisesGenerator
         For Each ayant In _data.AyantsDroit
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
-                If Not editeursCredits.Contains(ayant.Identite.Designation) Then
-                    editeursCredits.Add(ayant.Identite.Designation)
+                Dim desigC As String = If(ayant.Identite.Designation, "").Trim()
+                If Not String.IsNullOrEmpty(desigC) AndAlso Not editeursCredits.Contains(desigC) Then
+                    editeursCredits.Add(desigC)
                 End If
             End If
         Next
@@ -347,11 +352,13 @@ Public Class BalisesGenerator
             If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
                 Dim ph As Double
+                Dim desigES As String = If(ayant.Identite.Designation, "").Trim()
+                If String.IsNullOrEmpty(desigES) Then Continue For
                 If Double.TryParse(ayant.BDO.PH, NumberStyles.Any, CultureInfo.InvariantCulture, ph) Then
-                    If pourcentagesParEditeur.ContainsKey(ayant.Identite.Designation) Then
-                        pourcentagesParEditeur(ayant.Identite.Designation) += ph
+                    If pourcentagesParEditeur.ContainsKey(desigES) Then
+                        pourcentagesParEditeur(desigES) += ph
                     Else
-                        pourcentagesParEditeur(ayant.Identite.Designation) = ph
+                        pourcentagesParEditeur(desigES) = ph
                     End If
                 End If
             End If

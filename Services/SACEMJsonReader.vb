@@ -70,16 +70,20 @@ Public Class SACEMJsonReader
     End Function
 
     ''' <summary>
-    ''' Parse un ayant droit depuis un JObject
+    ''' Parse un ayant droit depuis un JObject.
+    ''' Supporte deux formats :
+    '''   - Léger  : Id + BDO à la racine, identité reenrichie depuis XLSX au chargement
+    '''   - Verbeux : Id + BDO à la racine + sous-objets Identite / Adresse / Contact
     ''' </summary>
     Private Shared Function ParseAyantDroit(jObj As JObject) As AyantDroit
         Dim ayant As New AyantDroit()
 
-        ' Format plat : Id, Role, Lettrage, PH, Signataire, Managelic, Managesub a la racine
-        ' L'identite est reenrichie depuis le XLSX dans JsonEditorForm via l'Id
+        ' ── BDO (toujours à la racine) ──
         ayant.BDO.Id        = GetStringValue(jObj, "Id")
         ayant.BDO.Role      = GetStringValue(jObj, "Role")
         ayant.BDO.PH        = GetStringValue(jObj, "PH")
+        ayant.BDO.DE        = GetStringValue(jObj, "DE")
+        ayant.BDO.DR        = GetStringValue(jObj, "DR")
         ayant.BDO.Lettrage  = GetStringValue(jObj, "Lettrage")
         ayant.BDO.Managelic = GetStringValue(jObj, "Managelic")
         ayant.BDO.Managesub = GetStringValue(jObj, "Managesub")
@@ -87,17 +91,61 @@ Public Class SACEMJsonReader
         Dim sigStr As String = GetStringValue(jObj, "Signataire")
         ayant.BDO.Signataire = (sigStr.ToUpper() = "TRUE" OrElse sigStr = "1")
 
-        ' Type deduit du prefixe de l'Id
-        Dim idVal As String = ayant.BDO.Id.Trim().ToUpper()
-        If idVal.StartsWith("P") Then
-            ayant.Identite.Type = "Physique"
-        ElseIf idVal.StartsWith("M") Then
-            ayant.Identite.Type = "Moral"
-        ElseIf ayant.BDO.Role = "E" Then
-            ayant.Identite.Type = "Moral"
+        ' ── Identité ── sous-objet si format verbeux, sinon déduit de l'Id
+        Dim identObj As JObject = TryCast(jObj("Identite"), JObject)
+        If identObj IsNot Nothing Then
+            ' Format verbeux
+            ayant.Identite.Type              = GetStringValue(identObj, "Type")
+            ayant.Identite.Designation       = GetStringValue(identObj, "Designation")
+            ayant.Identite.Pseudonyme        = GetStringValue(identObj, "Pseudonyme")
+            ayant.Identite.Nom               = GetStringValue(identObj, "Nom")
+            ayant.Identite.Prenom            = GetStringValue(identObj, "Prenom")
+            ayant.Identite.Genre             = GetStringValue(identObj, "Genre")
+            ayant.Identite.Nele              = GetStringValue(identObj, "Nele")
+            ayant.Identite.Nea               = GetStringValue(identObj, "Nea")
+            ayant.Identite.SocieteGestion    = GetStringValue(identObj, "SocieteGestion")
+            ayant.Identite.FormeJuridique    = GetStringValue(identObj, "FormeJuridique")
+            ayant.Identite.Capital           = GetStringValue(identObj, "Capital")
+            ayant.Identite.RCS               = GetStringValue(identObj, "RCS")
+            ayant.Identite.Siren             = GetStringValue(identObj, "Siren")
+            ayant.Identite.GenreRepresentant    = GetStringValue(identObj, "GenreRepresentant")
+            ayant.Identite.PrenomRepresentant   = GetStringValue(identObj, "PrenomRepresentant")
+            ayant.Identite.NomRepresentant      = GetStringValue(identObj, "NomRepresentant")
+            ayant.Identite.FonctionRepresentant = GetStringValue(identObj, "FonctionRepresentant")
         Else
-            ayant.Identite.Type = "Physique"
+            ' Format léger — Type déduit du préfixe Id, identité reenrichie depuis XLSX au chargement
+            Dim idVal As String = ayant.BDO.Id.Trim().ToUpper()
+            If idVal.StartsWith("P") Then
+                ayant.Identite.Type = "Physique"
+            ElseIf idVal.StartsWith("M") Then
+                ayant.Identite.Type = "Moral"
+            ElseIf ayant.BDO.Role = "E" OrElse ayant.BDO.Role = "AEC" Then
+                ayant.Identite.Type = "Moral"
+            Else
+                ayant.Identite.Type = "Physique"
+            End If
         End If
+
+        ' ── Adresse ── sous-objet si format verbeux
+        Dim adrObj As JObject = TryCast(jObj("Adresse"), JObject)
+        If adrObj IsNot Nothing Then
+            ayant.Adresse.NumVoie  = GetStringValue(adrObj, "NumVoie")
+            ayant.Adresse.TypeVoie = GetStringValue(adrObj, "TypeVoie")
+            ayant.Adresse.NomVoie  = GetStringValue(adrObj, "NomVoie")
+            ayant.Adresse.CP       = GetStringValue(adrObj, "CP")
+            ayant.Adresse.Ville    = GetStringValue(adrObj, "Ville")
+            ayant.Adresse.Pays     = GetStringValue(adrObj, "Pays")
+        End If
+
+        ' ── Contact ── sous-objet si format verbeux
+        Dim ctcObj As JObject = TryCast(jObj("Contact"), JObject)
+        If ctcObj IsNot Nothing Then
+            ayant.Contact.Mail = GetStringValue(ctcObj, "Mail")
+            ayant.Contact.Tel  = GetStringValue(ctcObj, "Tel")
+        End If
+
+        ' ── COAD/IPI ── champ plat optionnel
+        ayant.BDO.COAD_IPI = GetStringValue(jObj, "COAD_IPI")
 
         Return ayant
     End Function

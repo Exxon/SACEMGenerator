@@ -144,9 +144,11 @@ End Class
 ''' </summary>
 Public Class BDO
     Public Property Id As String       ' Clé stable vers le xlsx : P00001 / M00001
-    Public Property Role As String     ' "A", "C", "E", "AR", "AD"
-    Public Property COAD_IPI As String ' IPI de la personne (enrichi depuis XLSX, non persisté en JSON)
-    Public Property PH As String       ' Pourcentage
+    Public Property Role As String     ' "A", "C", "E", "AR", "AD", "AEC"
+    Public Property COAD_IPI As String ' COAD ou IPI de la personne (persisté dans le JSON verbeux)
+    Public Property PH As String       ' Part Harmonisée
+    Public Property DE As String       ' Droits d'Exécution Publique
+    Public Property DR As String       ' Droits de Reproduction Mécanique
     Public Property Lettrage As String
     Public Property Managelic As String
     Public Property Managesub As String

@@ -21,135 +21,645 @@
       "Role": "A",
       "Lettrage": "A",
       "PH": "12.5",
+      "DE": "16.6667",
+      "DR": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "Sissoko Moussa / Saamou",
+        "Pseudonyme": "Saamou",
+        "Nom": "Sissoko",
+        "Prenom": "Moussa",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "43",
+        "TypeVoie": "Avenue",
+        "NomVoie": "Du Président Wilson",
+        "CP": "931001",
+        "Ville": "Montreuil",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "moussa.prosissoko@gmail.com",
+        "Tel": "+33664858783"
+      },
+      "COAD_IPI": "IPI : 01128567739"
     },
     {
       "Id": "M00074",
       "Role": "E",
       "Lettrage": "A",
       "PH": "6.25",
+      "DE": "4.1667",
+      "DR": "6.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "TH Records",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "1 000,00 €",
+        "RCS": "Paris",
+        "Siren": "921 728 556",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Mamadou",
+        "NomRepresentant": "Niakate",
+        "FonctionRepresentant": "Président"
+      },
+      "Adresse": {
+        "NumVoie": "1",
+        "TypeVoie": "Impasse",
+        "NomVoie": "Petin",
+        "CP": "75019",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "moussa.prosissoko@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 1222153016"
     },
     {
       "Id": "M00007",
       "Role": "E",
       "Lettrage": "A",
       "PH": "6.25",
+      "DE": "4.1667",
+      "DR": "6.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "Bellum Publishing",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "EURL",
+        "Capital": "1000",
+        "RCS": "Nanterre",
+        "Siren": "853 105 048",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Antoine",
+        "NomRepresentant": "Basse",
+        "FonctionRepresentant": "Gérant"
+      },
+      "Adresse": {
+        "NumVoie": "77",
+        "TypeVoie": "Allée",
+        "NomVoie": "Georges Askinazi",
+        "CP": "92100",
+        "Ville": "Boulogne Billancourt",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "bellum.prod@gmail.com",
+        "Tel": "+33659582299"
+      },
+      "COAD_IPI": "IPI : 1047037384"
     },
     {
       "Id": "P00186",
       "Role": "A",
       "Lettrage": "B",
       "PH": "12.5",
+      "DE": "16.6667",
+      "DR": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "MAKANGOU Yoan / GENEZIO",
+        "Pseudonyme": "GENEZIO",
+        "Nom": "MAKANGOU",
+        "Prenom": "Yoan",
+        "Genre": "Masculin",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "32",
+        "TypeVoie": "rue",
+        "NomVoie": "Gaston",
+        "CP": "91230",
+        "Ville": "Montgeron",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "Genezio.officiel@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 00111189881"
     },
     {
       "Id": "M00082",
       "Role": "E",
       "Lettrage": "B",
       "PH": "12.5",
+      "DE": "8.3334",
+      "DR": "12.5",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "LE PACTE PUBLISHING",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "1000 €",
+        "RCS": "Paris",
+        "Siren": "944404086",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Andy",
+        "NomRepresentant": "KHOURY-RODRIGUEZ",
+        "FonctionRepresentant": "Directeur"
+      },
+      "Adresse": {
+        "NumVoie": "59",
+        "TypeVoie": "Rue",
+        "NomVoie": "De Ponthieu",
+        "CP": "75008",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "khouryandy@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": ""
     },
     {
       "Id": "P00187",
       "Role": "C",
       "Lettrage": "C",
       "PH": "8.3333",
+      "DE": "11.1111",
+      "DR": "8.3334",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "BARRADA Sami",
+        "Pseudonyme": "",
+        "Nom": "BARRADA",
+        "Prenom": "Sami",
+        "Genre": "Masculin",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "11",
+        "TypeVoie": "Avenue",
+        "NomVoie": "",
+        "CP": "95310",
+        "Ville": "Saint Ouen l’Aumone",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "samialaprod@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 01151612003"
     },
     {
       "Id": "P00187",
       "Role": "E",
       "Lettrage": "C",
       "PH": "8.3333",
+      "DE": "5.5555",
+      "DR": "8.3333",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "BARRADA Sami",
+        "Pseudonyme": "",
+        "Nom": "BARRADA",
+        "Prenom": "Sami",
+        "Genre": "Masculin",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "11",
+        "TypeVoie": "Avenue",
+        "NomVoie": "",
+        "CP": "95310",
+        "Ville": "Saint Ouen l’Aumone",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "samialaprod@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 01151612003"
     },
     {
       "Id": "P00185",
       "Role": "C",
       "Lettrage": "D",
       "PH": "8.3333",
+      "DE": "11.1111",
+      "DR": "8.3334",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "KHOURY-RODRIGUEZ Andy / ELIYEL",
+        "Pseudonyme": "ELIYEL",
+        "Nom": "KHOURY-RODRIGUEZ",
+        "Prenom": "Andy",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "2",
+        "TypeVoie": "Allée",
+        "NomVoie": "de l’Eglise",
+        "CP": "93340",
+        "Ville": "Le Raincy",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "khouryandy@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 01220237019"
     },
     {
       "Id": "M00081",
       "Role": "E",
       "Lettrage": "D",
       "PH": "1.25",
+      "DE": "0.8333",
+      "DR": "1.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "LONGUE VIE PUBLISHING",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "100 €",
+        "RCS": "Paris",
+        "Siren": "940571730",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Landry Wilson Sourou",
+        "NomRepresentant": "AGONHOUMEY",
+        "FonctionRepresentant": "Président"
+      },
+      "Adresse": {
+        "NumVoie": "61",
+        "TypeVoie": "Rue",
+        "NomVoie": "De Lyon",
+        "CP": "75012",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "landry@longuevie.co",
+        "Tel": ""
+      },
+      "COAD_IPI": ""
     },
     {
       "Id": "M00082",
       "Role": "E",
       "Lettrage": "D",
       "PH": "2.9167",
+      "DE": "1.9445",
+      "DR": "2.9167",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "LE PACTE PUBLISHING",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "1000 €",
+        "RCS": "Paris",
+        "Siren": "944404086",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Andy",
+        "NomRepresentant": "KHOURY-RODRIGUEZ",
+        "FonctionRepresentant": "Directeur"
+      },
+      "Adresse": {
+        "NumVoie": "59",
+        "TypeVoie": "Rue",
+        "NomVoie": "De Ponthieu",
+        "CP": "75008",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "khouryandy@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": ""
     },
     {
       "Id": "M00067",
       "Role": "E",
       "Lettrage": "D",
       "PH": "4.1666",
+      "DE": "2.7777",
+      "DR": "4.1666",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "Warner Chapell Music France",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "3 051 152 euros",
+        "RCS": "Paris",
+        "Siren": "334 416 070",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Régis",
+        "NomRepresentant": "Reynaud",
+        "FonctionRepresentant": "Gérant"
+      },
+      "Adresse": {
+        "NumVoie": "",
+        "TypeVoie": "Rue",
+        "NomVoie": "Félix Lemoine",
+        "CP": "44300",
+        "Ville": "Nantes",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "alexia.guerin@warnerchappell.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 215772668"
     },
     {
       "Id": "P00188",
       "Role": "C",
       "Lettrage": "E",
       "PH": "8.3333",
+      "DE": "11.1111",
+      "DR": "8.3334",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Physique",
+        "Designation": "EMAM Bahi / SOKOL",
+        "Pseudonyme": "SOKOL",
+        "Nom": "EMAM",
+        "Prenom": "Bahi",
+        "Genre": "Masculin",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "",
+        "Capital": "",
+        "RCS": "",
+        "Siren": "",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "",
+        "NomRepresentant": "",
+        "FonctionRepresentant": ""
+      },
+      "Adresse": {
+        "NumVoie": "",
+        "TypeVoie": "res",
+        "NomVoie": "Château des Perriers",
+        "CP": "93370",
+        "Ville": "Montfermeil",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "sokol.prodz@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 01220237019"
     },
     {
       "Id": "M00067",
       "Role": "E",
       "Lettrage": "E",
       "PH": "4.1666",
+      "DE": "2.7777",
+      "DR": "4.1666",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "Warner Chapell Music France",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "3 051 152 euros",
+        "RCS": "Paris",
+        "Siren": "334 416 070",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Régis",
+        "NomRepresentant": "Reynaud",
+        "FonctionRepresentant": "Gérant"
+      },
+      "Adresse": {
+        "NumVoie": "",
+        "TypeVoie": "Rue",
+        "NomVoie": "Félix Lemoine",
+        "CP": "44300",
+        "Ville": "Nantes",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "alexia.guerin@warnerchappell.com",
+        "Tel": ""
+      },
+      "COAD_IPI": "IPI : 215772668"
     },
     {
       "Id": "M00082",
       "Role": "E",
       "Lettrage": "E",
       "PH": "2.9167",
+      "DE": "1.9445",
+      "DR": "2.9167",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "LE PACTE PUBLISHING",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "1000 €",
+        "RCS": "Paris",
+        "Siren": "944404086",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Andy",
+        "NomRepresentant": "KHOURY-RODRIGUEZ",
+        "FonctionRepresentant": "Directeur"
+      },
+      "Adresse": {
+        "NumVoie": "59",
+        "TypeVoie": "Rue",
+        "NomVoie": "De Ponthieu",
+        "CP": "75008",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "khouryandy@gmail.com",
+        "Tel": ""
+      },
+      "COAD_IPI": ""
     },
     {
       "Id": "M00081",
       "Role": "E",
       "Lettrage": "E",
       "PH": "1.25",
+      "DE": "0.8333",
+      "DR": "1.25",
       "Managelic": "",
       "Managesub": "",
-      "Signataire": true
+      "Signataire": true,
+      "Identite": {
+        "Type": "Moral",
+        "Designation": "LONGUE VIE PUBLISHING",
+        "Pseudonyme": "",
+        "Nom": "",
+        "Prenom": "",
+        "Genre": "",
+        "Nele": "",
+        "Nea": "",
+        "SocieteGestion": "",
+        "FormeJuridique": "SAS",
+        "Capital": "100 €",
+        "RCS": "Paris",
+        "Siren": "940571730",
+        "GenreRepresentant": "",
+        "PrenomRepresentant": "Landry Wilson Sourou",
+        "NomRepresentant": "AGONHOUMEY",
+        "FonctionRepresentant": "Président"
+      },
+      "Adresse": {
+        "NumVoie": "61",
+        "TypeVoie": "Rue",
+        "NomVoie": "De Lyon",
+        "CP": "75012",
+        "Ville": "Paris",
+        "Pays": ""
+      },
+      "Contact": {
+        "Mail": "landry@longuevie.co",
+        "Tel": ""
+      },
+      "COAD_IPI": ""
     }
   ]
 }
