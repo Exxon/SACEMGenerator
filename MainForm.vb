@@ -17,8 +17,8 @@ Public Class MainForm
     Private _currentJsonPath As String
     Private _currentData As SACEMData
     Private _paragraphReader As ParagraphTemplateReader
-    Private _templatesDirectory As String = "Templates"
-    Private _outputDirectory As String = "Output"
+    Private _templatesDirectory As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "templates")
+    Private _outputDirectory As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "Output")
     Private _paragraphTemplatePath As String = "Templates\template_paragrahs.docx"
 
     ' ─────────────────────────────────────────────────────────────
@@ -884,14 +884,6 @@ Public Class MainForm
     Private Sub BtnGenerateBDO_Click(sender As Object, e As EventArgs)
         Try
             txtLog.AppendText($"{vbCrLf}=== GENERATION BDO ==={vbCrLf}")
-            ' DEBUG temporaire — vérifier identité dans _currentData
-            If _currentData IsNot Nothing AndAlso _currentData.AyantsDroit IsNot Nothing Then
-                For i As Integer = 0 To Math.Min(2, _currentData.AyantsDroit.Count - 1)
-                    Dim ay = _currentData.AyantsDroit(i)
-                    Dim nomDebug As String = If(ay.Identite IsNot Nothing, $"Type={ay.Identite.Type} Nom={ay.Identite.Nom} Desig={ay.Identite.Designation}", "Identite=Nothing")
-                    txtLog.AppendText($"  DEBUG AD{i+1}: {ay.BDO.Id} {ay.BDO.Role} | {nomDebug}{vbCrLf}")
-                Next
-            End If
             Dim bdoTemplatePath As String = Path.Combine(_templatesDirectory, "Bdo711.pdf")
             If Not File.Exists(bdoTemplatePath) Then
                 MessageBox.Show($"Template PDF BDO introuvable:{vbCrLf}{bdoTemplatePath}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
