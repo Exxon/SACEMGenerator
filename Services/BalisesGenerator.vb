@@ -152,11 +152,10 @@ Public Class BalisesGenerator
         SetBalise("compositeurslist", FormatList(compositeurs))
         SetBalise("compositeurspseudolist", FormatList(compositeursPseudo))
 
-        ' Liste des auteurs
+        ' Liste des auteurs (tous, SACEM + NON-SACEM, signataires ou non)
         Dim auteurs As New List(Of String)
         Dim auteursPseudo As New List(Of String)
         For Each ayant In _data.AyantsDroit
-            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "A" OrElse ayant.BDO.Role = "AD" Then
                 ' Pseudonyme si rempli, sinon Prénom Nom
                 Dim displayName As String
@@ -187,14 +186,14 @@ Public Class BalisesGenerator
         SetBalise("auteurslist", FormatList(auteurs))
         SetBalise("auteurspseudolist", FormatList(auteursPseudo))
 
-        ' Liste des éditeurs (SACEM uniquement - NON-SACEM exclus)
+        ' Liste des éditeurs (signataires, SACEM + NON-SACEM)
         Dim editeurs As New List(Of String)
         For Each ayant In _data.AyantsDroit
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
-                If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-                If Not editeurs.Contains(ayant.Identite.Designation) Then
-                    editeurs.Add(ayant.Identite.Designation)
+                Dim desigE As String = If(ayant.Identite.Designation, "").Trim()
+                If Not String.IsNullOrEmpty(desigE) AndAlso Not editeurs.Contains(desigE) Then
+                    editeurs.Add(desigE)
                 End If
             End If
         Next
@@ -221,14 +220,13 @@ Public Class BalisesGenerator
         ' Format: EDITEUR (pour son propre compte) ou EDITEUR (pour son propre compte et pour le compte de X, et pour le compte de Y)
         SetBalise("sublist", GenerateSubList())
 
-        ' Crédits (signataires uniquement)
+        ' Crédits : TOUS les éditeurs (SACEM + NON-SACEM, signataires ou non)
         Dim editeursCredits As New List(Of String)
         For Each ayant In _data.AyantsDroit
-            If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
-            If ayant.BDO.Role = "E" Then
-                If Not editeursCredits.Contains(ayant.Identite.Designation) Then
-                    editeursCredits.Add(ayant.Identite.Designation)
-                End If
+            If ayant.BDO.Role <> "E" Then Continue For
+            Dim desig As String = If(ayant.Identite.Designation, "").Trim()
+            If Not String.IsNullOrEmpty(desig) AndAlso Not editeursCredits.Contains(desig) Then
+                editeursCredits.Add(desig)
             End If
         Next
         SetBalise("credits", String.Join(" / ", editeursCredits))
@@ -239,75 +237,79 @@ Public Class BalisesGenerator
 
     ''' <summary>
     ''' Génère la liste des éditeurs avec leur rôle (propre compte / pour le compte de...)
-    ''' FILTRE NON-SACEM : seuls les membres SACEM sont inclus
+    ''' Génère la liste des éditeurs avec leur rôle (propre compte / pour le compte de...)
+    ''' Inclut SACEM + NON-SACEM signataires
+    ''' Managelic (Id) : d'autres éditeurs délèguent leur gestion à cet éditeur → apparaît "pour le compte de"
+    ''' Managesub n'intervient PAS dans [sublist]
     ''' </summary>
     Private Function GenerateSubList() As String
-        ' Collecter tous les éditeurs uniques (SACEM uniquement)
-        Dim editeursUniques As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
-
+        ' Table Id → désignation pour résoudre Managelic Id
+        Dim idToDesignation As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role <> "E" Then Continue For
-            If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
+            Dim idKey As String = If(ayant.BDO.Id, "").Trim()
+            If Not String.IsNullOrEmpty(idKey) AndAlso Not idToDesignation.ContainsKey(idKey) Then
+                idToDesignation(idKey) = GetDesignation(ayant)
+            End If
+        Next
 
+        ' Collecter tous les éditeurs uniques signataires (SACEM + NON-SACEM)
+        Dim editeursUniques As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+        For Each ayant In _data.AyantsDroit
+            If ayant.BDO.Role <> "E" Then Continue For
+            If Not IsSignataire(ayant) Then Continue For
             Dim designation As String = GetDesignation(ayant)
             If String.IsNullOrEmpty(designation) Then Continue For
-
             If Not editeursUniques.ContainsKey(designation.ToUpper()) Then
                 editeursUniques(designation.ToUpper()) = designation
             End If
         Next
 
-        ' Identifier qui gère qui (Managelic = l'éditeur qui gère)
-        ' Clé = éditeur principal, Valeur = liste des éditeurs qu'il gère
-        Dim gestionnaires As New Dictionary(Of String, List(Of String))(StringComparer.OrdinalIgnoreCase)
+        ' Managelic Id → résoudre le principal et marquer les cédants
+        Dim pourLeCompteDict As New Dictionary(Of String, List(Of String))(StringComparer.OrdinalIgnoreCase)
         Dim editeursGeres As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
         For Each ayant In _data.AyantsDroit
             If ayant.BDO.Role <> "E" Then Continue For
-            If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-
-            Dim managelic As String = If(ayant.BDO.Managelic, "").Trim()
-            If String.IsNullOrEmpty(managelic) Then Continue For
-
+            If Not IsSignataire(ayant) Then Continue For
             Dim designation As String = GetDesignation(ayant)
             If String.IsNullOrEmpty(designation) Then Continue For
 
-            ' Cet éditeur est géré par managelic
-            editeursGeres.Add(designation.ToUpper())
-
-            ' Ajouter à la liste des éditeurs gérés par managelic
-            If Not gestionnaires.ContainsKey(managelic.ToUpper()) Then
-                gestionnaires(managelic.ToUpper()) = New List(Of String)
-            End If
-
-            If Not gestionnaires(managelic.ToUpper()).Contains(designation) Then
-                gestionnaires(managelic.ToUpper()).Add(designation)
+            Dim managelichId As String = If(ayant.BDO.Managelic, "").Trim()
+            If Not String.IsNullOrEmpty(managelichId) Then
+                ' Résoudre Id → désignation du principal
+                Dim principalDesig As String = ""
+                If idToDesignation.TryGetValue(managelichId, principalDesig) AndAlso Not String.IsNullOrEmpty(principalDesig) Then
+                    editeursGeres.Add(designation.ToUpper())
+                    If Not pourLeCompteDict.ContainsKey(principalDesig.ToUpper()) Then
+                        pourLeCompteDict(principalDesig.ToUpper()) = New List(Of String)
+                    End If
+                    If Not pourLeCompteDict(principalDesig.ToUpper()).Contains(designation) Then
+                        pourLeCompteDict(principalDesig.ToUpper()).Add(designation)
+                    End If
+                End If
             End If
         Next
 
-        ' Construire la liste finale (seulement les éditeurs non gérés par d'autres)
+        ' Construire la liste finale (seulement les éditeurs non gérés via Managelic)
         Dim resultats As New List(Of String)
 
         For Each kvp In editeursUniques
             Dim designation As String = kvp.Value
             Dim key As String = kvp.Key
 
-            ' Ignorer les éditeurs qui sont gérés par d'autres
+            ' Ignorer les éditeurs délégués via Managelic (ils n'apparaissent pas en tête)
             If editeursGeres.Contains(key) Then Continue For
 
-            ' Construire la chaîne pour cet éditeur
-            If gestionnaires.ContainsKey(key) AndAlso gestionnaires(key).Count > 0 Then
-                ' Cet éditeur gère d'autres éditeurs
-                Dim geres As List(Of String) = gestionnaires(key)
+            If pourLeCompteDict.ContainsKey(key) AndAlso pourLeCompteDict(key).Count > 0 Then
+                Dim geres As List(Of String) = pourLeCompteDict(key)
                 Dim pourLeCompte As String = String.Join(", et pour le compte de ", geres)
                 resultats.Add($"{designation} (pour son propre compte et pour le compte de {pourLeCompte})")
             Else
-                ' Éditeur autonome
                 resultats.Add($"{designation} (pour son propre compte)")
             End If
         Next
 
-        ' Formater avec virgules et "et" pour le dernier
         If resultats.Count = 0 Then
             Return ""
         ElseIf resultats.Count = 1 Then

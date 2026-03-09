@@ -389,35 +389,31 @@ Public Class SuperbaliseGenerator
                 
                 ' Générer le texte
                 If createursUniques.Count > 0 Then
-                    ' Template SUBS - l'éditeur règle aux créateurs
                     Dim createursList As New List(Of String)
                     For Each createur In createursUniques.Values
                         createursList.Add(GetCreateurNomComplet(createur))
                     Next
                     Dim createursTexte As String = FormatListeEt(createursList)
-                    
+
                     Dim template As String = _paragraphReader.GetTemplate("SUBS")
                     If Not String.IsNullOrEmpty(template) Then
                         template = template.Replace("[editeur]", editeurDesignation)
                         template = template.Replace("[createur]", createursTexte)
-                        
-                        ' Gérer [editeurcedesub] et le bloc associé
+
                         If String.IsNullOrEmpty(editeurcedeTexte) Then
-                            ' Pas d'éditeurs qui cèdent : supprimer le bloc ", et ceux de [editeurcedesub],"
                             template = template.Replace(", et ceux de [editeurcedesub],", ",")
                             template = template.Replace(" et ceux de [editeurcedesub]", "")
+                            template = template.Replace(", [editeurcedesub],", ",")
+                            template = template.Replace(" [editeurcedesub]", "")
                             template = template.Replace("[editeurcedesub]", "")
                         Else
-                            ' Avec éditeurs qui cèdent
                             template = template.Replace("[editeurcedesub]", editeurcedeTexte)
-                            
-                            ' Si plusieurs éditeurs cèdent OU plusieurs créateurs, lui → leur
-                            If editeurcedeTexte.Contains(" et ") OrElse createursTexte.Contains(" et ") Then
+                            If createursList.Count > 1 OrElse editeurcedeTexte.Contains(" et ") Then
                                 template = template.Replace("lui revenant", "leur revenant")
                                 template = template.Replace("la part des redevances lui", "la part des redevances leur")
                             End If
                         End If
-                        
+
                         resultats.Add(template.Trim())
                     End If
                 End If
@@ -563,64 +559,68 @@ Public Class SuperbaliseGenerator
         If items.Count = 1 Then Return items(0)
         
         Dim allButLast As String = String.Join(", ", items.Take(items.Count - 1))
-        Return $"{allButLast} et {items.Last()}"
+        Return $"{allButLast}, et {items.Last()}"
     End Function
 
     ''' <summary>
     ''' Génère le contenu pour {licpart}
-    ''' Même logique que {subpart} mais basée sur Managelic
+    ''' Même logique que {subpart} mais basée sur Managelic (Id)
     ''' [editeur] = éditeur principal
     ''' [createur] = créateurs des lettrages
-    ''' [editeurcedelic] = éditeurs qui cèdent leur gestion de licences (via Managelic)
+    ''' [editeurcedelic] = éditeurs qui cèdent leur gestion de licences (via Managelic Id)
     ''' </summary>
     Public Function GenerateLicPart() As String
         Try
             Dim resultats As New List(Of String)
-            
-            ' Étape 1 : Identifier les éditeurs principaux (ceux qui n'ont pas de Managelic)
-            ' et ceux qui cèdent leur gestion de licences (ceux qui ont un Managelic)
+
+            ' Table Id → AyantDroit (pour résoudre Managelic Id → désignation)
+            Dim idToAyant As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
+            For Each ayant In _data.AyantsDroit
+                If ayant.BDO.Role <> "E" Then Continue For
+                Dim idKey As String = If(ayant.BDO.Id, "").Trim()
+                If Not String.IsNullOrEmpty(idKey) AndAlso Not idToAyant.ContainsKey(idKey) Then
+                    idToAyant(idKey) = ayant
+                End If
+            Next
+
+            ' Étape 1 : Identifier les éditeurs principaux et ceux qui cèdent via Managelic Id
             Dim editeursPrincipaux As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
             Dim editeursQuiCedent As New Dictionary(Of String, List(Of AyantDroit))(StringComparer.OrdinalIgnoreCase)
             Dim lettragesParEditeur As New Dictionary(Of String, HashSet(Of String))(StringComparer.OrdinalIgnoreCase)
-            
+
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
-                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
-                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
-                
+                If Not IsSACEMMember(ayant) Then Continue For
+                If Not IsSignataire(ayant) Then Continue For
+
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
-                
+
                 Dim key As String = designation.ToUpper()
-                Dim managelic As String = If(ayant.BDO.Managelic, "").Trim()
+                Dim managelichId As String = If(ayant.BDO.Managelic, "").Trim()
                 Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
-                
-                If String.IsNullOrEmpty(managelic) Then
-                    ' Éditeur principal (gère ses propres licences)
-                    If Not editeursPrincipaux.ContainsKey(key) Then
-                        editeursPrincipaux(key) = ayant
-                        lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-                    End If
-                    If Not String.IsNullOrEmpty(lettrage) Then
-                        lettragesParEditeur(key).Add(lettrage)
-                    End If
-                Else
-                    ' Cet éditeur cède sa gestion de licences à managelic
-                    Dim principalKey As String = managelic.ToUpper()
-                    If Not editeursQuiCedent.ContainsKey(principalKey) Then
-                        editeursQuiCedent(principalKey) = New List(Of AyantDroit)
-                    End If
-                    ' Éviter les doublons
-                    If Not editeursQuiCedent(principalKey).Any(Function(e) GetDesignationForDisplay(e).ToUpper() = key) Then
-                        editeursQuiCedent(principalKey).Add(ayant)
-                    End If
-                    ' Ajouter aussi cet éditeur comme principal pour son propre lettrage
-                    If Not editeursPrincipaux.ContainsKey(key) Then
-                        editeursPrincipaux(key) = ayant
-                        lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-                    End If
-                    If Not String.IsNullOrEmpty(lettrage) Then
-                        lettragesParEditeur(key).Add(lettrage)
+
+                ' Toujours enregistrer comme principal pour ses propres lettrages
+                If Not editeursPrincipaux.ContainsKey(key) Then
+                    editeursPrincipaux(key) = ayant
+                    lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                End If
+                If Not String.IsNullOrEmpty(lettrage) Then
+                    lettragesParEditeur(key).Add(lettrage)
+                End If
+
+                If Not String.IsNullOrEmpty(managelichId) Then
+                    ' Résoudre l'Id Managelic → désignation du gestionnaire principal
+                    Dim principalAyant As AyantDroit = Nothing
+                    If idToAyant.TryGetValue(managelichId, principalAyant) Then
+                        Dim principalDesignation As String = GetDesignationForDisplay(principalAyant)
+                        Dim principalKey As String = principalDesignation.ToUpper()
+                        If Not editeursQuiCedent.ContainsKey(principalKey) Then
+                            editeursQuiCedent(principalKey) = New List(Of AyantDroit)
+                        End If
+                        If Not editeursQuiCedent(principalKey).Any(Function(e) GetDesignationForDisplay(e).ToUpper() = key) Then
+                            editeursQuiCedent(principalKey).Add(ayant)
+                        End If
                     End If
                 End If
             Next
@@ -714,35 +714,31 @@ Public Class SuperbaliseGenerator
                 
                 ' Générer le texte
                 If createursUniques.Count > 0 Then
-                    ' Template LIC
                     Dim createursList As New List(Of String)
                     For Each createur In createursUniques.Values
                         createursList.Add(GetCreateurNomComplet(createur))
                     Next
                     Dim createursTexte As String = FormatListeEt(createursList)
-                    
+
                     Dim template As String = _paragraphReader.GetTemplate("LIC")
                     If Not String.IsNullOrEmpty(template) Then
                         template = template.Replace("[editeur]", editeurDesignation)
                         template = template.Replace("[createur]", createursTexte)
-                        
-                        ' Gérer [editeurcedelic] et le bloc associé
+
                         If String.IsNullOrEmpty(editeurcedeTexte) Then
-                            ' Pas d'éditeurs qui cèdent : supprimer le bloc ", et ceux de [editeurcedelic],"
                             template = template.Replace(", et ceux de [editeurcedelic],", ",")
                             template = template.Replace(" et ceux de [editeurcedelic]", "")
+                            template = template.Replace(", [editeurcedelic],", ",")
+                            template = template.Replace(" [editeurcedelic]", "")
                             template = template.Replace("[editeurcedelic]", "")
                         Else
-                            ' Avec éditeurs qui cèdent
                             template = template.Replace("[editeurcedelic]", editeurcedeTexte)
-                            
-                            ' Si plusieurs éditeurs cèdent OU plusieurs créateurs, lui → leur
-                            If editeurcedeTexte.Contains(" et ") OrElse createursTexte.Contains(" et ") Then
+                            If createursList.Count > 1 OrElse editeurcedeTexte.Contains(" et ") Then
                                 template = template.Replace("lui revenant", "leur revenant")
                                 template = template.Replace("la part lui", "la part leur")
                             End If
                         End If
-                        
+
                         resultats.Add(template.Trim())
                     End If
                 End If
