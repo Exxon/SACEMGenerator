@@ -57,37 +57,24 @@ Public Class MoteurRepartition
     ''' </summary>
     ''' <param name="dt">DataTable DtDepotCreateur</param>
     ''' <param name="params">Paramètres de l'œuvre</param>
-    ''' <summary>
-    ''' Retourne True si le rôle est considéré comme éditeur (E ou AEC).
-    ''' AEC = Auteur-Éditeur à Compte d'Auteur — traité comme éditeur pour la répartition.
-    ''' </summary>
-    Public Shared Function IsEditeur(role As String) As Boolean
-        Dim r As String = role.Trim().ToUpper()
-        Return r = "E" OrElse r = "AEC"
-    End Function
-
     Public Shared Sub Calculer(dt As DataTable, params As ParamsOeuvre)
         If dt Is Nothing OrElse dt.Rows.Count = 0 Then Return
 
         ' 1. Recenser les ayants droit par catégorie
         Dim lignesA  As New List(Of DataRow)()   ' Auteurs
         Dim lignesC  As New List(Of DataRow)()   ' Compositeurs
-        Dim lignesE  As New List(Of DataRow)()   ' Éditeurs (E + AEC)
+        Dim lignesE  As New List(Of DataRow)()   ' Éditeurs
         Dim lignesAR As New List(Of DataRow)()   ' Arrangeurs
         Dim lignesAD As New List(Of DataRow)()   ' Adaptateurs
 
         For Each row As DataRow In dt.Rows
-            Dim r As String = row("Role").ToString().Trim().ToUpper()
-            If IsEditeur(r) Then
-                lignesE.Add(row)
-            Else
-                Select Case r
-                    Case "A"  : lignesA.Add(row)
-                    Case "C"  : lignesC.Add(row)
-                    Case "AR" : lignesAR.Add(row)
-                    Case "AD" : lignesAD.Add(row)
-                End Select
-            End If
+            Select Case row("Role").ToString().Trim().ToUpper()
+                Case "A"  : lignesA.Add(row)
+                Case "C"  : lignesC.Add(row)
+                Case "E"  : lignesE.Add(row)
+                Case "AR" : lignesAR.Add(row)
+                Case "AD" : lignesAD.Add(row)
+            End Select
         Next
 
         Dim nbA  As Integer = lignesA.Count
@@ -132,6 +119,39 @@ Public Class MoteurRepartition
         RepartirEditeurs (lignesE,  depE,  drE,  sommePHEditeurs, params.Inegalitaire, dt)
         RepartirCategorie(lignesAR, depAR, drAR, params.Inegalitaire, dt)
         RepartirCategorie(lignesAD, depAD, drAD, params.Inegalitaire, dt)
+
+        ' 6. Arrondir PH à 3 décimales et ajuster dernier pour total = 100
+        AjusterTotal100(dt, "PH")
+        AjusterTotal100(dt, "DE")
+        AjusterTotal100(dt, "DR")
+    End Sub
+
+    ''' Arrondit tous les valeurs d'une colonne a 3 decimales
+    ''' puis ajuste la derniere ligne pour que le total soit exactement 100.
+    Private Shared Sub AjusterTotal100(dt As DataTable, colName As String)
+        If Not dt.Columns.Contains(colName) Then Return
+        Dim rows As New List(Of DataRow)(dt.Rows.Cast(Of DataRow)())
+        If rows.Count = 0 Then Return
+        Dim total As Double = 0
+        For Each row As DataRow In rows
+            Dim v As Double = 0
+            Double.TryParse(row(colName).ToString().Replace(",", "."),
+                            Globalization.NumberStyles.Any,
+                            Globalization.CultureInfo.InvariantCulture, v)
+            Dim rounded As Double = Math.Round(v, 3)
+            row(colName) = rounded.ToString("0.###", Globalization.CultureInfo.InvariantCulture)
+            total += rounded
+        Next
+        Dim ecart As Double = Math.Round(100 - total, 3)
+        If ecart <> 0 Then
+            Dim lastRow As DataRow = rows(rows.Count - 1)
+            Dim lastVal As Double = 0
+            Double.TryParse(lastRow(colName).ToString().Replace(",", "."),
+                            Globalization.NumberStyles.Any,
+                            Globalization.CultureInfo.InvariantCulture, lastVal)
+            Dim corrected As Double = Math.Round(lastVal + ecart, 3)
+            lastRow(colName) = corrected.ToString("0.###", Globalization.CultureInfo.InvariantCulture)
+        End If
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -514,7 +534,7 @@ Public Class MoteurRepartition
         ' Simuler l'ajout et recalculer
         Dim nbA  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "A")
         Dim nbC  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "C")
-        Dim nbE  As Integer = dt.AsEnumerable().Count(Function(r) IsEditeur(r("Role").ToString()))
+        Dim nbE  As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "E")
         Dim nbAR As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AR")
         Dim nbAD As Integer = dt.AsEnumerable().Count(Function(r) r("Role").ToString() = "AD")
 
@@ -522,9 +542,9 @@ Public Class MoteurRepartition
         Select Case nouveauRole.ToUpper()
             Case "A"  : nbA  += 1
             Case "C"  : nbC  += 1
+            Case "E"  : nbE  += 1
             Case "AR" : nbAR += 1
             Case "AD" : nbAD += 1
-            Case Else : If IsEditeur(nouveauRole) Then nbE += 1
         End Select
 
         Dim aArrangeur  As Boolean = nbAR > 0
@@ -532,7 +552,7 @@ Public Class MoteurRepartition
 
         ' Calculer parts DR après ajout
         Dim sommePHEditeurs As Double = dt.AsEnumerable().
-            Where(Function(r) IsEditeur(r("Role").ToString())).
+            Where(Function(r) r("Role").ToString() = "E").
             Sum(Function(r) ParsePH(r))
 
         Dim drA As Double = 0, drC As Double = 0, drE As Double = 0
@@ -547,11 +567,11 @@ Public Class MoteurRepartition
             Case "C"  : Return If(nbC > 0, Math.Round(drC / nbC, 4), 0)
             Case "AR" : Return If(nbAR > 0, Math.Round(drAR / nbAR, 4), 0)
             Case "AD" : Return If(nbAD > 0, Math.Round(drAD / nbAD, 4), 0)
-            Case Else
-                ' Pour un éditeur (E ou AEC) : PH = part DR de son créateur associé / nb éditeurs de ce créateur
+            Case "E"
+                ' Pour un éditeur : PH = part DR de son créateur associé / nb éditeurs de ce créateur
                 If Not String.IsNullOrEmpty(lettrageParent) Then
                     Dim editeursDuCreateur As Integer = dt.AsEnumerable().
-                        Count(Function(r) IsEditeur(r("Role").ToString()) AndAlso
+                        Count(Function(r) r("Role").ToString() = "E" AndAlso
                                           r("Lettrage").ToString() = lettrageParent) + 1
                     Dim partDRCreateur As Double = 0
                     Dim creaRow As DataRow = dt.AsEnumerable().
@@ -588,7 +608,7 @@ Public Class MoteurRepartition
 
         Dim lignesA  = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "A").ToList()
         Dim lignesC  = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "C").ToList()
-        Dim lignesE  = dt.AsEnumerable().Where(Function(r) IsEditeur(r("Role").ToString())).ToList()
+        Dim lignesE  = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "E").ToList()
         Dim lignesAR = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "AR").ToList()
         Dim lignesAD = dt.AsEnumerable().Where(Function(r) r("Role").ToString() = "AD").ToList()
 
@@ -742,7 +762,7 @@ Public Class MoteurRepartition
                 Dim lettrCrea As String = crea("Lettrage").ToString().Trim()
                 Dim phCrea As Double = ParsePH(crea)
                 Dim editeursDuCrea = dt.AsEnumerable().
-                    Where(Function(r) IsEditeur(r("Role").ToString()) AndAlso
+                    Where(Function(r) r("Role").ToString() = "E" AndAlso
                                       r("Lettrage").ToString() = lettrCrea).ToList()
                 If editeursDuCrea.Count = 0 Then Continue For
 
@@ -762,9 +782,9 @@ Public Class MoteurRepartition
             Next
 
         ' ── Cas éditeur (E) ─────────────────────────────────────────────────────
-        ElseIf IsEditeur(role) Then
+        ElseIf role = "E" Then
             Dim autres = dt.AsEnumerable().
-                Where(Function(r) IsEditeur(r("Role").ToString()) AndAlso
+                Where(Function(r) r("Role").ToString() = "E" AndAlso
                                   r("Lettrage").ToString() = lettrage AndAlso
                                   Not r Is rowModifiee).ToList()
 
@@ -814,12 +834,16 @@ Public Class MoteurRepartition
 
     Private Shared Sub EcrirePartsRow(row As DataRow, dep As Double, dr As Double, dt As DataTable)
         If dt.Columns.Contains("DE") Then
-            row("DE") = dep.ToString("0.####", Globalization.CultureInfo.InvariantCulture)
+            row("DE") = Math.Round(dep, 3).ToString("0.###", Globalization.CultureInfo.InvariantCulture)
         End If
         If dt.Columns.Contains("DR") Then
-            row("DR") = dr.ToString("0.####", Globalization.CultureInfo.InvariantCulture)
+            row("DR") = Math.Round(dr, 3).ToString("0.###", Globalization.CultureInfo.InvariantCulture)
         End If
     End Sub
+
+    Public Shared Function IsEditeur(role As String) As Boolean
+        Return role.Trim().ToUpper() = "E"
+    End Function
 
     Public Shared Function ParsePH(row As DataRow) As Double
         Dim ph As Double = 0

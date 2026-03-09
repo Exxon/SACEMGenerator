@@ -1,6 +1,7 @@
 Imports System.IO
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
+Imports OfficeOpenXml
 
 ''' <summary>
 ''' Service de lecture et parsing des fichiers JSON SACEM
@@ -11,7 +12,7 @@ Public Class SACEMJsonReader
     ''' <summary>
     ''' Charge un fichier JSON SACEM
     ''' </summary>
-    Public Shared Function LoadFromFile(filePath As String) As SACEMData
+    Public Shared Function LoadFromFile(filePath As String, Optional xlsxPath As String = "") As SACEMData
         Try
             If Not File.Exists(filePath) Then
                 Throw New FileNotFoundException($"Fichier JSON introuvable: {filePath}")
@@ -58,6 +59,11 @@ Public Class SACEMJsonReader
                     Dim ayantDroit As AyantDroit = ParseAyantDroit(CType(ayantDroitToken, JObject))
                     data.AyantsDroit.Add(ayantDroit)
                 Next
+            End If
+
+            ' Enrichissement depuis XLSX si chemin fourni
+            If Not String.IsNullOrEmpty(xlsxPath) AndAlso File.Exists(xlsxPath) Then
+                EnrichirDepuisXlsx(data, xlsxPath)
             End If
 
             Return data
@@ -274,4 +280,120 @@ Public Class SACEMJsonReader
             Return (False, $"Erreur lors de la validation: {ex.Message}")
         End Try
     End Function
+    Private Shared Sub EnrichirDepuisXlsx(data As SACEMData, xlsxPath As String)
+        Try
+            Dim dtPhy As New System.Data.DataTable()
+            Dim dtMor As New System.Data.DataTable()
+            Using pkg As New ExcelPackage(New FileInfo(xlsxPath))
+                ' Charger feuille PERSONNEPHYSIQUE
+                Dim wsPhy As ExcelWorksheet = pkg.Workbook.Worksheets.FirstOrDefault(Function(w) w.Name = "PERSONNEPHYSIQUE")
+                If wsPhy IsNot Nothing Then
+                    dtPhy = FeuillVersDatatable(wsPhy)
+                End If
+                ' Charger feuille PERSONNEMORALE
+                Dim wsMor As ExcelWorksheet = pkg.Workbook.Worksheets.FirstOrDefault(Function(w) w.Name = "PERSONNEMORALE")
+                If wsMor IsNot Nothing Then
+                    dtMor = FeuillVersDatatable(wsMor)
+                End If
+            End Using
+
+            For Each ayant In data.AyantsDroit
+                Dim id As String = If(ayant.BDO.Id, "").Trim().ToUpper()
+                If String.IsNullOrEmpty(id) Then Continue For
+
+                If id.StartsWith("P") AndAlso dtPhy.Columns.Count > 0 Then
+                    Dim row = dtPhy.AsEnumerable().FirstOrDefault(
+                        Function(r) r("Id").ToString().Trim().ToUpper() = id)
+                    If row IsNot Nothing Then
+                        ayant.Identite.Type = "Physique"
+                        ayant.Identite.Nom = XlsStr(row, "Nom")
+                        ayant.Identite.Prenom = XlsStr(row, "Prenom")
+                        ayant.Identite.Pseudonyme = XlsStr(row, "Pseudonyme")
+                        Dim desig As String = (ayant.Identite.Nom & " " & ayant.Identite.Prenom).Trim()
+                        If Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme) Then desig &= " / " & ayant.Identite.Pseudonyme
+                        ayant.Identite.Designation = desig
+                        ayant.Identite.Genre = XlsStr(row, "Genre")
+                        ayant.Identite.Nele = XlsStr(row, "Date de naissance")
+                        ayant.Identite.Nea = XlsStr(row, "Lieu de naissance")
+                        ayant.Identite.SocieteGestion = If(String.IsNullOrEmpty(XlsStr(row, "SocieteGestion")), "SACEM", XlsStr(row, "SocieteGestion"))
+                        ayant.Adresse.NumVoie = XlsStr(row, "Num de voie")
+                        ayant.Adresse.TypeVoie = XlsStr(row, "Type de voie")
+                        ayant.Adresse.NomVoie = XlsStr(row, "Nom de voie")
+                        ayant.Adresse.CP = XlsStr(row, "CP")
+                        ayant.Adresse.Ville = XlsStr(row, "Ville")
+                        ayant.Contact.Mail = XlsStr(row, "Mail")
+                        ayant.Contact.Tel = XlsStr(row, "Tel")
+                        ' COAD/IPI
+                        Dim ipi As String = XlsStr(row, "IPI")
+                        Dim coad As String = XlsStr(row, "COAD")
+                        If Not String.IsNullOrEmpty(ipi) Then
+                            ayant.BDO.COAD_IPI = "IPI : " & ipi
+                        ElseIf Not String.IsNullOrEmpty(coad) Then
+                            ayant.BDO.COAD_IPI = "COAD : " & coad
+                        End If
+                    End If
+                ElseIf id.StartsWith("M") AndAlso dtMor.Columns.Count > 0 Then
+                    Dim row = dtMor.AsEnumerable().FirstOrDefault(
+                        Function(r) r("Id").ToString().Trim().ToUpper() = id)
+                    If row IsNot Nothing Then
+                        ayant.Identite.Type = "Moral"
+                        Dim sgMor As String = XlsStr(row, "SocieteGestion")
+                        ayant.Identite.SocieteGestion = If(String.IsNullOrEmpty(sgMor), "SACEM", sgMor)
+                        ayant.Identite.Designation = XlsStr(row, "Designation")
+                        ayant.Identite.FormeJuridique = XlsStr(row, "Forme Juridique")
+                        ayant.Identite.Capital = XlsStr(row, "Capital")
+                        ayant.Identite.RCS = XlsStr(row, "RCS")
+                        ayant.Identite.Siren = XlsStr(row, "Siren")
+                        ayant.Identite.PrenomRepresentant = XlsStr(row, "Prenom representant")
+                        ayant.Identite.NomRepresentant = XlsStr(row, "Nom representant")
+                        ayant.Identite.FonctionRepresentant = XlsStr(row, "Fonction representant")
+                        ayant.Adresse.NumVoie = XlsStr(row, "Num de voie")
+                        ayant.Adresse.TypeVoie = XlsStr(row, "Type de voie")
+                        ayant.Adresse.NomVoie = XlsStr(row, "Nom de voie")
+                        ayant.Adresse.CP = XlsStr(row, "CP")
+                        ayant.Adresse.Ville = XlsStr(row, "Ville")
+                        ayant.Contact.Mail = XlsStr(row, "Mail")
+                        ayant.Contact.Tel = XlsStr(row, "Tel")
+                        Dim ipi As String = XlsStr(row, "IPI")
+                        Dim coad As String = XlsStr(row, "COAD")
+                        If Not String.IsNullOrEmpty(ipi) Then
+                            ayant.BDO.COAD_IPI = "IPI : " & ipi
+                        ElseIf Not String.IsNullOrEmpty(coad) Then
+                            ayant.BDO.COAD_IPI = "COAD : " & coad
+                        End If
+                    End If
+                End If
+            Next
+        Catch ex As Exception
+            ' Enrichissement XLSX échoué — on continue avec identité vide
+        End Try
+    End Sub
+
+    Private Shared Function FeuillVersDatatable(ws As ExcelWorksheet) As System.Data.DataTable
+        Dim dt As New System.Data.DataTable()
+        If ws.Dimension Is Nothing Then Return dt
+        Dim lastCol As Integer = ws.Dimension.End.Column
+        Dim lastRow As Integer = ws.Dimension.End.Row
+        ' Headers ligne 1
+        For col As Integer = 1 To lastCol
+            Dim header As String = If(ws.Cells(1, col).Text, "").Trim()
+            If String.IsNullOrEmpty(header) Then header = "Col" & col
+            dt.Columns.Add(header)
+        Next
+        ' Données
+        For row As Integer = 2 To lastRow
+            Dim dr As System.Data.DataRow = dt.NewRow()
+            For col As Integer = 1 To lastCol
+                dr(col - 1) = If(ws.Cells(row, col).Text, "")
+            Next
+            dt.Rows.Add(dr)
+        Next
+        Return dt
+    End Function
+
+    Private Shared Function XlsStr(row As System.Data.DataRow, colName As String) As String
+        If Not row.Table.Columns.Contains(colName) Then Return ""
+        Return If(row(colName).ToString(), "").Trim()
+    End Function
+
 End Class

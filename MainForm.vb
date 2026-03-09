@@ -63,6 +63,8 @@ Public Class MainForm
     Private WithEvents cmsGrille As ContextMenuStrip
     Private WithEvents mnuSupprimer As ToolStripMenuItem
     Private WithEvents lblStatut As Label
+    Private lblTotaux As Label
+    Private lblTotauxStats As Label
 
     ' ─────────────────────────────────────────────────────────────
     ' CONTRÔLES — PANNEAU DROIT (Stats + Config + Génération + Logs)
@@ -331,6 +333,7 @@ Public Class MainForm
         dgv = New DataGridView()
         dgv.Location = New Point(12, 74)
         dgv.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right Or AnchorStyles.Bottom
+        AddHandler dgv.Resize, AddressOf Dgv_Resize
         dgv.Size = New Size(600, 700)
         dgv.ContextMenuStrip = cmsGrille
         dgv.AllowUserToAddRows = False
@@ -351,6 +354,18 @@ Public Class MainForm
         dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect
         dgv.BackgroundColor = Color.White
         pnlAD.Controls.Add(dgv)
+
+        lblTotaux = New Label()
+        lblTotaux.Location = New Point(12, 778)
+        lblTotaux.Size = New Size(600, 22)
+        lblTotaux.Text = ""
+        If lblTotauxStats IsNot Nothing Then lblTotauxStats.Text = ""
+        lblTotaux.Font = New Font("Segoe UI", 8, FontStyle.Bold)
+        lblTotaux.ForeColor = Color.FromArgb(40, 80, 160)
+        lblTotaux.BackColor = Color.FromArgb(235, 240, 250)
+        lblTotaux.TextAlign = ContentAlignment.MiddleLeft
+        lblTotaux.Padding = New Padding(4, 0, 0, 0)
+        pnlAD.Controls.Add(lblTotaux)
 
         lblStatut = New Label()
         lblStatut.Dock = DockStyle.Bottom
@@ -501,7 +516,24 @@ Public Class MainForm
         lblPartsInedites.Location = New Point(170, yR)
         lblPartsInedites.Size = New Size(150, 18)
         lblPartsInedites.Font = New Font("Segoe UI", 8)
+        yR += 22
+        lblTotauxStats = New Label()
+        lblTotauxStats.Text = ""
+        lblTotauxStats.Location = New Point(12, yR)
+        lblTotauxStats.Size = New Size(310, 18)
+        lblTotauxStats.Font = New Font("Segoe UI", 8, FontStyle.Bold)
+        lblTotauxStats.ForeColor = Color.FromArgb(40, 80, 160)
         pnlRight.Controls.Add(lblPartsInedites)
+        pnlRight.Controls.Add(lblTotauxStats)
+        yR += 22
+
+        lblTotauxStats = New Label()
+        lblTotauxStats.Location = New Point(12, yR)
+        lblTotauxStats.Size = New Size(rw, 18)
+        lblTotauxStats.Text = ""
+        lblTotauxStats.Font = New Font("Segoe UI", 8, FontStyle.Bold)
+        lblTotauxStats.ForeColor = Color.FromArgb(40, 80, 160)
+        pnlRight.Controls.Add(lblTotauxStats)
         yR += 28
 
         ' ── Section : Configuration ───────────────────────────────
@@ -638,6 +670,7 @@ Public Class MainForm
         AddHandler dgv.DragOver, AddressOf Dgv_DragOver
         AddHandler dgv.DragDrop, AddressOf Dgv_DragDrop
         AddHandler dgv.CellValidating, AddressOf Dgv_CellValidating
+        AddHandler dgv.CellEndEdit, AddressOf Dgv_CellEndEdit
         AddHandler dgv.CellBeginEdit, AddressOf Dgv_CellBeginEdit
         AddHandler dgv.DataError, AddressOf Dgv_DataError
         AddHandler dgv.CellDoubleClick, AddressOf Dgv_CellDoubleClick
@@ -751,7 +784,7 @@ Public Class MainForm
         Try
             txtLog.AppendText($"{vbCrLf}=== CHARGEMENT JSON ==={vbCrLf}")
             txtLog.AppendText($"Fichier: {Path.GetFileName(_currentJsonPath)}{vbCrLf}")
-            _currentData = SACEMJsonReader.LoadFromFile(_currentJsonPath)
+            _currentData = SACEMJsonReader.LoadFromFile(_currentJsonPath, PersonnesForm.DefaultXlsxPath)
             If _currentData Is Nothing Then Throw New Exception("Echec du chargement du JSON")
             Dim validation = SACEMJsonReader.ValidateStructure(_currentData)
             If Not validation.IsValid Then
@@ -891,6 +924,7 @@ Public Class MainForm
             End If
             Dim outputFileName As String = CleanFileName($"BDO_{_currentData.Titre}_{_currentData.Interprete}.pdf")
             Dim outputPath As String = Path.Combine(_outputDirectory, outputFileName)
+            SynchroniserVersData()
             Dim generator As New BDOPdfGenerator(_currentData)
             Dim success As Boolean = generator.Generate(bdoTemplatePath, outputPath)
             For Each logEntry In generator.GenerationLog : txtLog.AppendText($"{logEntry}{vbCrLf}") : Next
@@ -924,6 +958,7 @@ Public Class MainForm
             For Each kvp In templates
                 Dim outputPath As String = Path.Combine(_outputDirectory, CleanFileName($"{kvp.Key}_{_currentData.Titre}_{_currentData.Interprete}.docx"))
                 txtLog.AppendText($"Generation {kvp.Key}...{vbCrLf}")
+                SynchroniserVersData()
                 Dim contractGenerator As New ContractGenerator(_currentData, _paragraphReader)
                 Dim success As Boolean = contractGenerator.Generate(kvp.Value, outputPath, kvp.Key)
                 For Each logEntry In contractGenerator.GenerationLog : txtLog.AppendText($"  {logEntry}{vbCrLf}") : Next
@@ -1256,9 +1291,10 @@ Public Class MainForm
                 Dim nr As DataRow = DtDepotCreateur.NewRow()
                 nr("Id") = SafeStr(foundRow, "Id")
                 nr("Type") = "Moral"
-                nr("Designation") = designation
+                nr("Designation") = NormalizeUpper(designation)
                 nr("Role") = "E"
                 nr("Lettrage") = creaRow("Lettrage")
+                nr("PH") = "1"  ' Valeur initiale neutre — recalculée par le moteur
                 nr("SocieteGestion") = SafeStr(foundRow, "SocieteGestion", "SACEM")
                 nr("Signataire") = True
                 CopierAdresseContact(nr, foundRow)
@@ -1351,6 +1387,7 @@ Public Class MainForm
         nr("Genre") = SafeStr(foundRow, "Genre")
         nr("SocieteGestion") = SafeStr(foundRow, "SocieteGestion", "SACEM")
         nr("Role") = role
+        nr("PH") = "1"  ' Valeur initiale neutre — recalculée par le moteur
         nr("COAD_IPI") = GetCOADIPI(foundRow)
         nr("Signataire") = True
         CopierAdresseContact(nr, foundRow)
@@ -1471,9 +1508,71 @@ Public Class MainForm
             Dim params As MoteurRepartition.ParamsOeuvre = GetParamsOeuvre()
             MoteurRepartition.RecalculerPHApresAjout(DtDepotCreateur, params)
             MoteurRepartition.Calculer(DtDepotCreateur, params)
+            UpdateTotaux()
         Catch ex As Exception
             lblStatut.Text = "Erreur moteur : " & ex.Message
         End Try
+    End Sub
+
+    ''' Synchronise les PH/DE/DR de DtDepotCreateur vers _currentData.AyantsDroit
+    ''' pour que la generation BDO/Contrats utilise les valeurs affichees dans la grille.
+    Private Sub SynchroniserVersData()
+        If _currentData Is Nothing OrElse DtDepotCreateur Is Nothing Then Return
+        txtLog.AppendText($"=== SYNCHRO DtDepot rows: {DtDepotCreateur.Rows.Count}, _currentData ayants: {_currentData.AyantsDroit.Count}{vbCrLf}")
+        For Each ayant In _currentData.AyantsDroit
+            Dim id As String = If(ayant.BDO.Id, "").Trim().ToUpper()
+            If String.IsNullOrEmpty(id) Then
+                txtLog.AppendText($"  SKIP: Id vide pour {ayant.Identite?.Designation}{vbCrLf}")
+                Continue For
+            End If
+            Dim row As DataRow = DtDepotCreateur.AsEnumerable().FirstOrDefault(
+                Function(r) r("Id").ToString().Trim().ToUpper() = id AndAlso
+                            r("Role").ToString().Trim().ToUpper() = If(ayant.BDO.Role, "").Trim().ToUpper() AndAlso
+                            r("Lettrage").ToString().Trim().ToUpper() = If(ayant.BDO.Lettrage, "").Trim().ToUpper())
+            If row Is Nothing Then
+                txtLog.AppendText($"  NOT FOUND: {id} Role={ayant.BDO.Role} Lettrage={ayant.BDO.Lettrage}{vbCrLf}")
+                Continue For
+            End If
+            txtLog.AppendText($"  SYNC: {id} PH={row("PH")} DE={row("DE")} DR={row("DR")}{vbCrLf}")
+            ayant.BDO.PH = row("PH").ToString()
+            ayant.BDO.DE = row("DE").ToString()
+            ayant.BDO.DR = row("DR").ToString()
+        Next
+    End Sub
+
+    Private Sub Dgv_Resize(sender As Object, e As EventArgs)
+        If lblTotaux Is Nothing OrElse dgv Is Nothing Then Return
+        lblTotaux.Location = New Point(dgv.Left, dgv.Bottom + 2)
+        lblTotaux.Width = dgv.Width
+    End Sub
+
+    Private Sub UpdateTotaux()
+        If DtDepotCreateur Is Nothing OrElse DtDepotCreateur.Rows.Count = 0 Then
+            lblTotaux.Text = ""
+            If lblTotauxStats IsNot Nothing Then lblTotauxStats.Text = ""
+            Return
+        End If
+        Dim totalPH As Double = 0
+        Dim totalDE As Double = 0
+        Dim totalDR As Double = 0
+        For Each row As DataRow In DtDepotCreateur.Rows
+            Dim ph As Double : Double.TryParse(row("PH").ToString(), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, ph) : totalPH += ph
+            Dim de As Double : Double.TryParse(row("DE").ToString(), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, de) : totalDE += de
+            Dim dr As Double : Double.TryParse(row("DR").ToString(), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, dr) : totalDR += dr
+        Next
+        Dim totTxt As String = $"PH: {Math.Round(totalPH, 2).ToString("F2")}%  DE: {Math.Round(totalDE, 2).ToString("F2")}%  DR: {Math.Round(totalDR, 2).ToString("F2")}%"
+        If lblTotauxStats IsNot Nothing Then lblTotauxStats.Text = totTxt
+        If lblTotaux IsNot Nothing Then lblTotaux.Text = totTxt
+    End Sub
+
+    Private Sub ResetPHCreateurs()
+        Dim createurs = DtDepotCreateur.AsEnumerable().Where(
+            Function(r) Not MoteurRepartition.IsEditeur(r("Role").ToString())).ToList()
+        If createurs.Count = 0 Then Return
+        Dim phEgal As Double = Math.Round(100.0 / createurs.Count, 4)
+        For Each r As DataRow In createurs
+            r("PH") = phEgal.ToString(Globalization.CultureInfo.InvariantCulture)
+        Next
     End Sub
 
     Private Sub BtnCalculer_Click(sender As Object, e As EventArgs)
@@ -1560,45 +1659,7 @@ Public Class MainForm
                 Boolean.TryParse(row("Signataire").ToString(), sig)
                 ad("Signataire") = sig
 
-                ' ── Identité ──
-                Dim identite As New JObject()
-                identite("Type") = row("Type").ToString()
-                identite("Designation") = row("Designation").ToString()
-                identite("Pseudonyme") = row("Pseudonyme").ToString()
-                identite("Nom") = row("Nom").ToString()
-                identite("Prenom") = row("Prenom").ToString()
-                identite("Genre") = row("Genre").ToString()
-                identite("Nele") = row("Nele").ToString()
-                identite("Nea") = row("Nea").ToString()
-                identite("SocieteGestion") = row("SocieteGestion").ToString()
-                ' Morale
-                identite("FormeJuridique") = row("FormeJuridique").ToString()
-                identite("Capital") = row("Capital").ToString()
-                identite("RCS") = row("RCS").ToString()
-                identite("Siren") = row("Siren").ToString()
-                identite("GenreRepresentant") = row("GenreRepresentant").ToString()
-                identite("PrenomRepresentant") = row("PrenomRepresentant").ToString()
-                identite("NomRepresentant") = row("NomRepresentant").ToString()
-                identite("FonctionRepresentant") = row("FonctionRepresentant").ToString()
-                ad("Identite") = identite
-
-                ' ── Adresse ──
-                Dim adresse As New JObject()
-                adresse("NumVoie") = row("NumVoie").ToString()
-                adresse("TypeVoie") = row("TypeVoie").ToString()
-                adresse("NomVoie") = row("NomVoie").ToString()
-                adresse("CP") = row("CP").ToString()
-                adresse("Ville") = row("Ville").ToString()
-                adresse("Pays") = row("Pays").ToString()
-                ad("Adresse") = adresse
-
-                ' ── Contact ──
-                Dim contact As New JObject()
-                contact("Mail") = row("Mail").ToString()
-                contact("Tel") = row("Tel").ToString()
-                ad("Contact") = contact
-
-                ' ── COAD/IPI ──
+                ' ── COAD/IPI uniquement (identité toujours depuis XLSX) ──
                 ad("COAD_IPI") = row("COAD_IPI").ToString()
 
                 arr.Add(ad)
@@ -1683,7 +1744,7 @@ Public Class MainForm
                     nr("Nom") = If(ayant.Identite.Nom, "")
                     nr("Prenom") = If(ayant.Identite.Prenom, "")
                     nr("Pseudonyme") = If(ayant.Identite.Pseudonyme, "")
-                    nr("Designation") = If(ayant.Identite.Designation, "")
+                    nr("Designation") = NormalizeUpper(If(ayant.Identite.Designation, ""))
                     nr("Genre") = If(ayant.Identite.Genre, "")
                     nr("Nele") = If(ayant.Identite.Nele, "")
                     nr("Nea") = If(ayant.Identite.Nea, "")
@@ -1705,6 +1766,19 @@ Public Class MainForm
                     nr("Mail") = If(ayant.Contact IsNot Nothing, If(ayant.Contact.Mail, ""), "")
                     nr("Tel") = If(ayant.Contact IsNot Nothing, If(ayant.Contact.Tel, ""), "")
                     nr("COAD_IPI") = If(ayant.BDO.COAD_IPI, "")
+                    NormalizeRow(nr)
+                    ' Reconstruire Designation depuis valeurs normalisées
+                    If typeJson = "Physique" Then
+                        Dim nom As String = nr("Nom").ToString().Trim()
+                        Dim prenom As String = nr("Prenom").ToString().Trim()
+                        Dim pseudo As String = nr("Pseudonyme").ToString().Trim()
+                        Dim desig As String = $"{nom} {prenom}".Trim()
+                        If Not String.IsNullOrEmpty(pseudo) Then desig &= $" / {pseudo}"
+                        If nr("Role").ToString().Trim().ToUpper() = "AEC" Then desig &= " (EAC)"
+                        nr("Designation") = desig
+                    Else
+                        nr("Designation") = NormalizeUpper(nr("Designation").ToString())
+                    End If
                     nr("_Orphelin") = False
                 ElseIf typeJson = "Physique" AndAlso DtPersonPhy IsNot Nothing Then
                     ' Format léger Physique : enrichissement depuis XLSX
@@ -1729,7 +1803,10 @@ Public Class MainForm
                         nr("Mail") = SafeStr(phyRow, "Mail")
                         nr("Tel") = SafeStr(phyRow, "Tel")
                         nr("COAD_IPI") = GetCOADIPI(phyRow)
-                        Dim desigBuilt As String = BuildDesignation(phyRow)
+                        NormalizeRow(nr)  ' Normaliser Nom/Prenom/Pseudo avant BuildDesignation
+                        Dim desigBuilt As String = $"{nr("Nom")} {nr("Prenom")}".Trim()
+                        Dim pseudo As String = nr("Pseudonyme").ToString().Trim()
+                        If Not String.IsNullOrEmpty(pseudo) Then desigBuilt &= $" / {pseudo}"
                         If nr("Role").ToString().Trim().ToUpper() = "AEC" Then desigBuilt &= " (EAC)"
                         nr("Designation") = desigBuilt
                     End If
@@ -1757,13 +1834,15 @@ Public Class MainForm
                         nr("Mail") = SafeStr(morRow, "Mail")
                         nr("Tel") = SafeStr(morRow, "Tel")
                         nr("COAD_IPI") = GetCOADIPI(morRow)
-                        nr("Designation") = SafeStr(morRow, "Designation")
+                        nr("Designation") = NormalizeUpper(SafeStr(morRow, "Designation"))
+                        NormalizeRow(nr)
                     End If
                 End If
                 DtDepotCreateur.Rows.Add(nr)
             Next
             dgv.Refresh()
             AppelerMoteur()
+            UpdateTotaux()
             lblStatut.Text = "JSON charge : " & Path.GetFileName(filePath) & " — donnees enrichies depuis BDD"
             RefreshDeclarationFormat()
         Catch ex As Exception
@@ -1774,6 +1853,79 @@ Public Class MainForm
     ' ─────────────────────────────────────────────────────────────
     ' GRILLE — ÉVÉNEMENTS
     ' ─────────────────────────────────────────────────────────────
+    ' ─────────────────────────────────────────────────────────────
+    ' NORMALISATION DES NOMS
+    ' ─────────────────────────────────────────────────────────────
+    ''' <summary>Met en majuscules complètes (NOM, société, pays, pseudonyme)</summary>
+    Private Function NormalizeUpper(s As String) As String
+        If String.IsNullOrWhiteSpace(s) Then Return s.Trim()
+        Return s.Trim().ToUpper()
+    End Function
+
+    ''' <summary>Première lettre de chaque mot en majuscule, reste minuscule. Gère tirets et apostrophes.</summary>
+    Private Function NormalizePrenom(s As String) As String
+        If String.IsNullOrWhiteSpace(s) Then Return s.Trim()
+        s = s.Trim().ToLower()
+        Dim result As New System.Text.StringBuilder()
+        Dim nextUpper As Boolean = True
+        For Each ch As Char In s
+            If ch = "-"c OrElse ch = " "c OrElse ch = "'"c Then
+                result.Append(ch)
+                nextUpper = True
+            ElseIf nextUpper Then
+                result.Append(Char.ToUpper(ch))
+                nextUpper = False
+            Else
+                result.Append(ch)
+            End If
+        Next
+        Return result.ToString()
+    End Function
+
+    ''' <summary>Normalise une valeur de cellule selon son nom de colonne</summary>
+    Private Function NormalizeByColumn(colName As String, value As String) As String
+        Select Case colName
+            Case "Nom", "Designation", "Pseudonyme", "Pays", "NomRepresentant", "PrenomRepresentant"
+                ' PrenomRepresentant traité comme Prénom malgré le nom
+                If colName = "PrenomRepresentant" Then Return NormalizePrenom(value)
+                Return NormalizeUpper(value)
+            Case "Prenom"
+                Return NormalizePrenom(value)
+            Case Else
+                Return value
+        End Select
+    End Function
+
+    ''' <summary>Normalise une ligne DataRow pour toutes les colonnes concernées</summary>
+    Private Sub NormalizeRow(nr As DataRow)
+        ' Designation est construite par BuildDesignation — ne pas écraser
+        For Each col As String In {"Nom", "Pseudonyme", "Pays", "NomRepresentant"}
+            If nr.Table.Columns.Contains(col) Then
+                nr(col) = NormalizeUpper(nr(col).ToString())
+            End If
+        Next
+        For Each col As String In {"Prenom", "PrenomRepresentant"}
+            If nr.Table.Columns.Contains(col) Then
+                nr(col) = NormalizePrenom(nr(col).ToString())
+            End If
+        Next
+    End Sub
+
+    ''' <summary>Normalise à la saisie dans la grille</summary>
+    Private Sub Dgv_CellEndEdit(sender As Object, e As DataGridViewCellEventArgs)
+        Dim colName As String = dgv.Columns(e.ColumnIndex).Name
+        Dim colsToNorm As String() = {"Nom", "Designation", "Pseudonyme", "Pays", "NomRepresentant", "Prenom", "PrenomRepresentant"}
+        If Not colsToNorm.Contains(colName) Then Return
+        If e.RowIndex < 0 OrElse e.RowIndex >= DtDepotCreateur.Rows.Count Then Return
+        Dim row As DataRow = DtDepotCreateur.Rows(e.RowIndex)
+        Dim current As String = row(colName).ToString()
+        Dim normalized As String = NormalizeByColumn(colName, current)
+        If current <> normalized Then
+            row(colName) = normalized
+            dgv.Refresh()
+        End If
+    End Sub
+
     Private Sub Dgv_CellValidating(sender As Object, e As DataGridViewCellValidatingEventArgs)
         If dgv.Columns(e.ColumnIndex).Name = "Role" Then
             Dim val As String = e.FormattedValue.ToString().Trim().ToUpper()
@@ -1930,6 +2082,7 @@ Public Class MainForm
             Next
         End If
         lstResultats.Visible = lstResultats.Items.Count > 0
+        If lstResultats.Visible Then lstResultats.BringToFront()
     End Sub
 
     Private Sub LstResultats_DoubleClick(sender As Object, e As EventArgs)
@@ -1941,6 +2094,7 @@ Public Class MainForm
         Else
             AjouterPersonnePhysique(sel)
         End If
+        ResetPHCreateurs()
         AppelerMoteur()
         UpdateLettrages()
         ApplyRowColors()

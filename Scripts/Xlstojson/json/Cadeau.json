@@ -10,8 +10,8 @@
   "Territoire": "Monde",
   "Arrangement": "",
   "Inegalitaire": "TRUE",
-  "Declaration": "Bellum Publishing",
-  "Format": "Bellum Publishing",
+  "Declaration": "BELLUM PUBLISHING",
+  "Format": "BELLUM PUBLISHING",
   "Faita": "Paris",
   "Faitle": "08/03/2026",
   "Commentaire": "",
@@ -28,9 +28,9 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "Sissoko Moussa / Saamou",
-        "Pseudonyme": "Saamou",
-        "Nom": "Sissoko",
+        "Designation": "SISSOKO MOUSSA / SAAMOU",
+        "Pseudonyme": "SAAMOU",
+        "Nom": "SISSOKO",
         "Prenom": "Moussa",
         "Genre": "",
         "Nele": "",
@@ -71,7 +71,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Moral",
-        "Designation": "TH Records",
+        "Designation": "TH RECORDS",
         "Pseudonyme": "",
         "Nom": "",
         "Prenom": "",
@@ -85,7 +85,7 @@
         "Siren": "921 728 556",
         "GenreRepresentant": "",
         "PrenomRepresentant": "Mamadou",
-        "NomRepresentant": "Niakate",
+        "NomRepresentant": "NIAKATE",
         "FonctionRepresentant": "Président"
       },
       "Adresse": {
@@ -114,7 +114,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Moral",
-        "Designation": "Bellum Publishing",
+        "Designation": "BELLUM PUBLISHING",
         "Pseudonyme": "",
         "Nom": "",
         "Prenom": "",
@@ -128,7 +128,7 @@
         "Siren": "853 105 048",
         "GenreRepresentant": "",
         "PrenomRepresentant": "Antoine",
-        "NomRepresentant": "Basse",
+        "NomRepresentant": "BASSE",
         "FonctionRepresentant": "Gérant"
       },
       "Adresse": {
@@ -157,7 +157,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "MAKANGOU Yoan / GENEZIO",
+        "Designation": "MAKANGOU YOAN / GENEZIO",
         "Pseudonyme": "GENEZIO",
         "Nom": "MAKANGOU",
         "Prenom": "Yoan",
@@ -189,7 +189,7 @@
       "COAD_IPI": "IPI : 00111189881"
     },
     {
-      "Id": "M00082",
+      "Id": "M00083",
       "Role": "E",
       "Lettrage": "B",
       "PH": "12.5",
@@ -200,7 +200,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Moral",
-        "Designation": "LE PACTE PUBLISHING",
+        "Designation": "JOUUUE PUBLISHING",
         "Pseudonyme": "",
         "Nom": "",
         "Prenom": "",
@@ -243,7 +243,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "BARRADA Sami",
+        "Designation": "BARRADA SAMI",
         "Pseudonyme": "",
         "Nom": "BARRADA",
         "Prenom": "Sami",
@@ -286,7 +286,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "BARRADA Sami",
+        "Designation": "BARRADA SAMI",
         "Pseudonyme": "",
         "Nom": "BARRADA",
         "Prenom": "Sami",
@@ -329,7 +329,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "KHOURY-RODRIGUEZ Andy / ELIYEL",
+        "Designation": "KHOURY-RODRIGUEZ ANDY / ELIYEL",
         "Pseudonyme": "ELIYEL",
         "Nom": "KHOURY-RODRIGUEZ",
         "Prenom": "Andy",
@@ -458,7 +458,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Moral",
-        "Designation": "Warner Chapell Music France",
+        "Designation": "WARNER CHAPELL MUSIC FRANCE",
         "Pseudonyme": "",
         "Nom": "",
         "Prenom": "",
@@ -472,7 +472,7 @@
         "Siren": "334 416 070",
         "GenreRepresentant": "",
         "PrenomRepresentant": "Régis",
-        "NomRepresentant": "Reynaud",
+        "NomRepresentant": "REYNAUD",
         "FonctionRepresentant": "Gérant"
       },
       "Adresse": {
@@ -501,7 +501,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Physique",
-        "Designation": "EMAM Bahi / SOKOL",
+        "Designation": "EMAM BAHI / SOKOL",
         "Pseudonyme": "SOKOL",
         "Nom": "EMAM",
         "Prenom": "Bahi",
@@ -544,7 +544,7 @@
       "Signataire": true,
       "Identite": {
         "Type": "Moral",
-        "Designation": "Warner Chapell Music France",
+        "Designation": "WARNER CHAPELL MUSIC FRANCE",
         "Pseudonyme": "",
         "Nom": "",
         "Prenom": "",
@@ -558,7 +558,7 @@
         "Siren": "334 416 070",
         "GenreRepresentant": "",
         "PrenomRepresentant": "Régis",
-        "NomRepresentant": "Reynaud",
+        "NomRepresentant": "REYNAUD",
         "FonctionRepresentant": "Gérant"
       },
       "Adresse": {

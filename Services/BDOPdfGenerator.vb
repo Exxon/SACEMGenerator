@@ -173,7 +173,7 @@ Public Class BDOPdfGenerator
             Dim designation As String
             If ident IsNot Nothing Then
                 If String.Equals(ident.Type, "moral", StringComparison.OrdinalIgnoreCase) Then
-                    designation = If(ident.Designation, "")
+                    designation = If(ident.Designation, "").Trim().ToUpper()
                 Else
                     designation = GetDisplayCivilName(ident)
                 End If
@@ -222,7 +222,7 @@ Public Class BDOPdfGenerator
                 If Not String.IsNullOrEmpty(bdo.PH) Then
                     Dim phVal As Double
                     If Double.TryParse(bdo.PH.Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, phVal) Then
-                        values(fields("PH")) = phVal.ToString("F2").Replace(".", ",")
+                        values(fields("PH")) = FormatPH(phVal)
                     Else
                         values(fields("PH")) = bdo.PH
                     End If
@@ -271,16 +271,23 @@ Public Class BDOPdfGenerator
     Private Function GetDisplayCivilName(ident As Identite) As String
         Dim prenom As String = TitleKeepHyphens(If(ident.Prenom, ""))
         Dim nom As String = If(ident.Nom, "").Trim().ToUpper()
+        Dim pseudo As String = If(ident.Pseudonyme, "").Trim().ToUpper()
 
+        Dim base As String
         If Not String.IsNullOrEmpty(prenom) AndAlso Not String.IsNullOrEmpty(nom) Then
-            Return $"{prenom} {nom}".Trim()
+            base = $"{prenom} {nom}".Trim()
         ElseIf Not String.IsNullOrEmpty(nom) Then
-            Return nom
+            base = nom
         ElseIf Not String.IsNullOrEmpty(prenom) Then
-            Return prenom
+            base = prenom
         Else
-            Return If(ident.Designation, "")
+            base = If(ident.Designation, "").Trim().ToUpper()
         End If
+
+        If Not String.IsNullOrEmpty(pseudo) Then
+            Return $"{base} / {pseudo}"
+        End If
+        Return base
     End Function
 
     ''' <summary>
@@ -348,7 +355,7 @@ Public Class BDOPdfGenerator
                     End If
                 End If
             ElseIf role = "E" Then
-                Dim pub As String = If(ident.Designation, "").Trim()
+                Dim pub As String = If(ident.Designation, "").Trim().ToUpper()
                 If estSacem AndAlso Not String.IsNullOrEmpty(pub) Then
                     editorsSacem.Add(pub)
                 ElseIf Not estSacem Then
@@ -417,7 +424,7 @@ Public Class BDOPdfGenerator
                     noms.Add(nm)
                 End If
             ElseIf role = "E" Then
-                Dim pub As String = If(ayant.Identite.Designation, "").Trim()
+                Dim pub As String = If(ayant.Identite.Designation, "").Trim().ToUpper()
                 If Not String.IsNullOrEmpty(pub) AndAlso Not noms.Contains(pub) Then
                     noms.Add(pub)
                 End If
@@ -453,7 +460,7 @@ Public Class BDOPdfGenerator
     ''' Formate un pourcentage en français
     ''' </summary>
     Private Function FormatPct(v As Double) As String
-        Return v.ToString("F2").Replace(".", ",") & "%"
+        Return FormatPH(v) & "%"
     End Function
 
     ''' <summary>
@@ -658,4 +665,15 @@ if __name__ == '__main__':
         _log.Add($"Champs générés: {values.Count}")
         Return values
     End Function
+    Private Shared Function FormatPH(v As Double) As String
+        ' 3 decimales si necessaire, sinon 2
+        Dim r3 As Double = Math.Round(v, 3)
+        Dim r2 As Double = Math.Round(v, 2)
+        If r3 = r2 Then
+            Return r2.ToString("F2").Replace(".", ",")
+        Else
+            Return r3.ToString("F3").Replace(".", ",")
+        End If
+    End Function
+
 End Class
