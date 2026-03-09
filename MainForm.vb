@@ -1637,8 +1637,8 @@ Public Class MainForm
             obj("Territoire") = If(cbTerritoire.SelectedItem IsNot Nothing, cbTerritoire.SelectedItem.ToString(), cbTerritoire.Text)
             obj("Arrangement") = If(cbArrangement.SelectedItem IsNot Nothing, cbArrangement.SelectedItem.ToString(), cbArrangement.Text)
             obj("Inegalitaire") = If(cbInegalitaire.Checked, "TRUE", "FALSE")
-            obj("Declaration") = cbDeclaration.Text.Trim()
-            obj("Format") = cbFormat.Text.Trim()
+            obj("Declaration") = cbDeclaration.Text.Trim().ToUpper()
+            obj("Format") = cbFormat.Text.Trim().ToUpper()
             obj("Faita") = txtFaita.Text.Trim()
             obj("Faitle") = dtFaitle.Value.ToString("dd/MM/yyyy")
             obj("Commentaire") = ""
@@ -1707,8 +1707,8 @@ Public Class MainForm
             cbTerritoire.Text = If(obj("Territoire") IsNot Nothing, obj("Territoire").ToString(), "")
             cbArrangement.Text = If(obj("Arrangement") IsNot Nothing, obj("Arrangement").ToString(), "")
             txtISWC.Text = If(obj("ISWC") IsNot Nothing, obj("ISWC").ToString(), "")
-            cbDeclaration.Text = If(obj("Declaration") IsNot Nothing, obj("Declaration").ToString(), "")
-            cbFormat.Text = If(obj("Format") IsNot Nothing, obj("Format").ToString(), "")
+            cbDeclaration.Text = If(obj("Declaration") IsNot Nothing, obj("Declaration").ToString().Trim().ToUpper(), "")
+            cbFormat.Text = If(obj("Format") IsNot Nothing, obj("Format").ToString().Trim().ToUpper(), "")
             txtFaita.Text = If(obj("Faita") IsNot Nothing, obj("Faita").ToString(), "")
             If DateTime.TryParseExact(If(obj("Faitle") IsNot Nothing, obj("Faitle").ToString(), ""), "dd/MM/yyyy",
                                       Globalization.CultureInfo.InvariantCulture,

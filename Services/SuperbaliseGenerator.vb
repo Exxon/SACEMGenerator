@@ -119,19 +119,24 @@ Public Class SuperbaliseGenerator
             ' Calculer le total PH SACEM éditeurs pour recalculer sur 100%
             Dim totalSACEM As Double = GetTotalSACEMPH({"E"})
 
+            ' Pré-calculer les PH en batch (arrondi 3 déc., total=100 garanti)
+            Dim phBrutsEditeurs As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+            For Each kvp In editeursUniques
+                Dim phBrutE As Double
+                Double.TryParse(If(kvp.Value.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phBrutE)
+                phBrutsEditeurs(kvp.Key) = phBrutE
+            Next
+            Dim phFormatesEditeurs As Dictionary(Of String, String) = RecalculatePHBatch(phBrutsEditeurs, totalSACEM)
+
             ' Générer les paragraphes pour chaque éditeur unique
             For Each kvp In editeursUniques
                 Dim ayant As AyantDroit = kvp.Value
-
-                ' Recalculer le PH sur 100% de la part éditeur SACEM
-                Dim phBrut As Double
-                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
-                                Globalization.NumberStyles.Any,
-                                Globalization.CultureInfo.InvariantCulture, phBrut)
                 Dim copie As New AyantDroit()
                 CopyAyantDroit(ayant, copie)
-                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
-                
+                copie.BDO.PH = If(phFormatesEditeurs.ContainsKey(kvp.Key), phFormatesEditeurs(kvp.Key), "0.00")
+
                 Dim templateKey As String = GetTemplateKey(copie)
                 If String.IsNullOrEmpty(templateKey) Then Continue For
 
@@ -178,18 +183,23 @@ Public Class SuperbaliseGenerator
             ' Calculer le total PH SACEM éditeurs pour recalculer sur 100%
             Dim totalSACEM As Double = GetTotalSACEMPH({"E"})
 
+            ' Pré-calculer les PH en batch (arrondi 3 déc., total=100 garanti)
+            Dim phBrutsE As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+            For Each kvp In editeursUniques
+                Dim phBrutE As Double
+                Double.TryParse(If(kvp.Value.BDO.PH, "0").Replace(",", "."),
+                                Globalization.NumberStyles.Any,
+                                Globalization.CultureInfo.InvariantCulture, phBrutE)
+                phBrutsE(kvp.Key) = phBrutE
+            Next
+            Dim phFormatesE As Dictionary(Of String, String) = RecalculatePHBatch(phBrutsE, totalSACEM)
+
             For Each kvp In editeursUniques
                 Dim ayant As AyantDroit = kvp.Value
-
-                ' Recalculer le PH sur 100% de la part éditeur SACEM
-                Dim phBrut As Double
-                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
-                                Globalization.NumberStyles.Any,
-                                Globalization.CultureInfo.InvariantCulture, phBrut)
                 Dim copie As New AyantDroit()
                 CopyAyantDroit(ayant, copie)
-                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
-                
+                copie.BDO.PH = If(phFormatesE.ContainsKey(kvp.Key), phFormatesE(kvp.Key), "0.00")
+
                 Dim templateKey As String = GetTemplateKey(copie)
                 If String.IsNullOrEmpty(templateKey) Then Continue For
 
@@ -233,51 +243,59 @@ Public Class SuperbaliseGenerator
     Public Function GenerateSubPart() As String
         Try
             Dim resultats As New List(Of String)
-            
+
+            ' Index Id → AyantDroit (premier éditeur trouvé pour cet Id)
+            Dim idToAyant As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
+            For Each ayant In _data.AyantsDroit
+                If ayant.BDO.Role <> "E" Then Continue For
+                Dim idKey As String = If(ayant.BDO.Id, "").Trim()
+                If Not String.IsNullOrEmpty(idKey) AndAlso Not idToAyant.ContainsKey(idKey) Then
+                    idToAyant(idKey) = ayant
+                End If
+            Next
+
             ' Étape 1 : Identifier les éditeurs principaux (ceux qui n'ont pas de Managesub)
             ' et ceux qui cèdent leur sous-édition (ceux qui ont un Managesub)
+            ' IMPORTANT : Managesub contient un Id (ex: "M00067"), pas une désignation
+            ' On indexe tout par designation.ToUpper() pour les principaux
+            ' et on résout l'Id Managesub → designation du principal
             Dim editeursPrincipaux As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
             Dim editeursQuiCedent As New Dictionary(Of String, List(Of AyantDroit))(StringComparer.OrdinalIgnoreCase)
             Dim lettragesParEditeur As New Dictionary(Of String, HashSet(Of String))(StringComparer.OrdinalIgnoreCase)
-            
+
             For Each ayant In _data.AyantsDroit
                 If ayant.BDO.Role <> "E" Then Continue For
-                If Not IsSACEMMember(ayant) Then Continue For ' Exclure NON-SACEM
-                If Not IsSignataire(ayant) Then Continue For  ' Exclure non-signataires
-                
+                If Not IsSACEMMember(ayant) Then Continue For
+                If Not IsSignataire(ayant) Then Continue For
+
                 Dim designation As String = GetDesignationForDisplay(ayant)
                 If String.IsNullOrEmpty(designation) Then Continue For
-                
+
                 Dim key As String = designation.ToUpper()
-                Dim managesub As String = If(ayant.BDO.Managesub, "").Trim()
+                Dim managesubId As String = If(ayant.BDO.Managesub, "").Trim()
                 Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
-                
-                If String.IsNullOrEmpty(managesub) Then
-                    ' Éditeur principal (gère sa propre sous-édition)
-                    If Not editeursPrincipaux.ContainsKey(key) Then
-                        editeursPrincipaux(key) = ayant
-                        lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-                    End If
-                    If Not String.IsNullOrEmpty(lettrage) Then
-                        lettragesParEditeur(key).Add(lettrage)
-                    End If
-                Else
-                    ' Cet éditeur cède sa sous-édition à managesub
-                    Dim principalKey As String = managesub.ToUpper()
-                    If Not editeursQuiCedent.ContainsKey(principalKey) Then
-                        editeursQuiCedent(principalKey) = New List(Of AyantDroit)
-                    End If
-                    ' Éviter les doublons
-                    If Not editeursQuiCedent(principalKey).Any(Function(e) GetDesignationForDisplay(e).ToUpper() = key) Then
-                        editeursQuiCedent(principalKey).Add(ayant)
-                    End If
-                    ' Ajouter aussi cet éditeur comme principal pour son propre lettrage
-                    If Not editeursPrincipaux.ContainsKey(key) Then
-                        editeursPrincipaux(key) = ayant
-                        lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-                    End If
-                    If Not String.IsNullOrEmpty(lettrage) Then
-                        lettragesParEditeur(key).Add(lettrage)
+
+                ' Toujours enregistrer cet éditeur comme principal (pour ses lettrages propres)
+                If Not editeursPrincipaux.ContainsKey(key) Then
+                    editeursPrincipaux(key) = ayant
+                    lettragesParEditeur(key) = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+                End If
+                If Not String.IsNullOrEmpty(lettrage) Then
+                    lettragesParEditeur(key).Add(lettrage)
+                End If
+
+                If Not String.IsNullOrEmpty(managesubId) Then
+                    ' Résoudre l'Id Managesub → designation du gestionnaire
+                    Dim principalAyant As AyantDroit = Nothing
+                    If idToAyant.TryGetValue(managesubId, principalAyant) Then
+                        Dim principalDesignation As String = GetDesignationForDisplay(principalAyant)
+                        Dim principalKey As String = principalDesignation.ToUpper()
+                        If Not editeursQuiCedent.ContainsKey(principalKey) Then
+                            editeursQuiCedent(principalKey) = New List(Of AyantDroit)
+                        End If
+                        If Not editeursQuiCedent(principalKey).Any(Function(e) GetDesignationForDisplay(e).ToUpper() = key) Then
+                            editeursQuiCedent(principalKey).Add(ayant)
+                        End If
                     End If
                 End If
             Next
@@ -515,11 +533,16 @@ Public Class SuperbaliseGenerator
     ''' </summary>
     Private Function GetDesignationForDisplay(ayant As AyantDroit) As String
         If ayant.Identite.Type?.ToLower() = "moral" Then
-            Return If(ayant.Identite.Designation, "").Trim()
+            Return If(ayant.Identite.Designation, "").Trim().ToUpper()
         Else
-            Dim nom As String = If(ayant.Identite.Nom, "").Trim()
+            Dim nom As String = If(ayant.Identite.Nom, "").Trim().ToUpper()
             Dim prenom As String = If(ayant.Identite.Prenom, "").Trim()
-            Return $"{nom} {prenom}".Trim()
+            Dim pseudo As String = If(ayant.Identite.Pseudonyme, "").Trim().ToUpper()
+            Dim base As String = $"{prenom} {nom}".Trim()
+            If Not String.IsNullOrEmpty(pseudo) Then
+                Return $"{base} / {pseudo}"
+            End If
+            Return base
         End If
     End Function
     
@@ -527,10 +550,9 @@ Public Class SuperbaliseGenerator
     ''' Obtient le nom complet du créateur : Nom Prénom (sans pseudo pour subpart)
     ''' </summary>
     Private Function GetCreateurNomComplet(ayant As AyantDroit) As String
-        Dim nom As String = If(ayant.Identite.Nom, "").Trim()
+        Dim nom As String = If(ayant.Identite.Nom, "").Trim().ToUpper()
         Dim prenom As String = If(ayant.Identite.Prenom, "").Trim()
-        
-        Return $"{nom} {prenom}".Trim()
+        Return $"{prenom} {nom}".Trim()
     End Function
     
     ''' <summary>
@@ -768,14 +790,83 @@ Public Class SuperbaliseGenerator
 
     ''' <summary>
     ''' Recalcule un PH brut (sur 50%) en pourcentage sur 100% de la part SACEM.
+    ''' Format : 2 décimales si la 3ème est zéro, sinon 3 décimales.
     ''' </summary>
     Private Function RecalculatePH(phBrut As Double, totalSACEM As Double) As String
-        Dim phRecalcule As Double = phBrut / totalSACEM * 100
-        Return phRecalcule.ToString("F2", Globalization.CultureInfo.InvariantCulture)
+        If totalSACEM = 0 Then Return "0.00"
+        Dim phRecalcule As Double = Math.Round(phBrut / totalSACEM * 100, 3)
+        Return FormatPHValue(phRecalcule)
+    End Function
+
+    ''' <summary>
+    ''' Formate une valeur PH : 2 décimales si .xx0, sinon 3 décimales.
+    ''' </summary>
+    Private Shared Function FormatPHValue(v As Double) As String
+        Dim r2 As Double = Math.Round(v, 2)
+        ' Tolérance : artefact flottant < 0.0015 -> 2 décimales
+        If Math.Abs(v - r2) < 0.0015 Then
+            Return r2.ToString("F2", Globalization.CultureInfo.InvariantCulture)
+        Else
+            Return v.ToString("F3", Globalization.CultureInfo.InvariantCulture)
+        End If
+    End Function
+
+    ''' <summary>
+    ''' Recalcule tous les PH d'un dictionnaire clé→phBrut sur 100% avec total=100 garanti.
+    ''' Ajuste l'écart sur le premier élément ayant 3 décimales réelles.
+    ''' Retourne un dictionnaire clé→string formaté.
+    ''' </summary>
+    Private Shared Function RecalculatePHBatch(phBruts As Dictionary(Of String, Double), totalSACEM As Double) As Dictionary(Of String, String)
+        Dim result As New Dictionary(Of String, String)(StringComparer.OrdinalIgnoreCase)
+        If totalSACEM = 0 OrElse phBruts.Count = 0 Then Return result
+
+        ' Étape 1 : arrondi 3 decimales
+        Dim valeurs As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+        For Each kvp In phBruts
+            valeurs(kvp.Key) = System.Math.Round(kvp.Value / totalSACEM * 100, 3)
+        Next
+
+        ' Étape 2 : snapper les valeurs a moins de 0.002 d'un arrondi 2-dec
+        For Each k In valeurs.Keys.ToList()
+            Dim v As Double = valeurs(k)
+            Dim r2 As Double = Math.Round(v, 2)
+            If Math.Abs(v - r2) < 0.002 Then
+                valeurs(k) = r2
+            End If
+        Next
+
+        ' Étape 3 : distribuer l'ecart par 0.001 sur les candidats a 3 dec reelles (desc)
+        Dim ecart As Double = Math.Round(100 - valeurs.Values.Sum(), 3)
+        If ecart <> 0 Then
+            Dim candidats As New List(Of String)
+            For Each kvp In valeurs.OrderByDescending(Function(x) x.Value)
+                If Math.Round(kvp.Value, 2) <> kvp.Value Then
+                    candidats.Add(kvp.Key)
+                End If
+            Next
+            If candidats.Count = 0 Then
+                Dim maxKey As String = valeurs.OrderByDescending(Function(x) x.Value).First().Key
+                valeurs(maxKey) = Math.Round(valeurs(maxKey) + ecart, 3)
+            Else
+                Dim pas As Double = If(ecart > 0, 0.001, -0.001)
+                Dim nPas As Integer = CInt(Math.Round(Math.Abs(ecart) / 0.001))
+                For i As Integer = 0 To nPas - 1
+                    Dim k As String = candidats(i Mod candidats.Count)
+                    valeurs(k) = Math.Round(valeurs(k) + pas, 3)
+                Next
+            End If
+        End If
+
+        For Each kvp In valeurs
+            result(kvp.Key) = FormatPHValue(kvp.Value)
+        Next
+        Return result
     End Function
 
     Private Function CombineRolesAC() As Dictionary(Of String, AyantDroit)
         Dim combined As New Dictionary(Of String, AyantDroit)(StringComparer.OrdinalIgnoreCase)
+        ' PH bruts accumulés séparément (avant recalcul) pour batch à la fin
+        Dim phBruts As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
 
         ' Calculer le total PH SACEM auteurs/compositeurs pour recalculer sur 100%
         Dim totalSACEM As Double = GetTotalSACEMPH({"A", "C", "AD"})
@@ -785,44 +876,42 @@ Public Class SuperbaliseGenerator
             If Not IsSACEMMember(ayant) Then Continue For
             ' Exclure les non-signataires
             If Not IsSignataire(ayant) Then Continue For
-            
+
             ' Créer une clé normalisée basée sur Designation OU Nom+Prenom
             Dim key As String
             If Not String.IsNullOrEmpty(ayant.Identite.Designation) Then
                 key = NormalizeDesignation(ayant.Identite.Designation)
             Else
-                ' Pour les personnes physiques, utiliser Nom + Prenom
                 key = NormalizeDesignation($"{ayant.Identite.Nom} {ayant.Identite.Prenom}")
             End If
-            
+
             Dim role As String = ayant.BDO.Role
+            Dim phNouveau As Double
+            Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
+                            Globalization.NumberStyles.Any,
+                            Globalization.CultureInfo.InvariantCulture, phNouveau)
 
             If combined.ContainsKey(key) Then
-                ' Combiner A+C en AC (seulement si c'est la même personne)
+                ' Combiner A+C en AC
                 If (role = "A" OrElse role = "C") AndAlso
                    (combined(key).BDO.Role = "A" OrElse combined(key).BDO.Role = "C") Then
                     combined(key).BDO.Role = "AC"
                 End If
-                ' Cumuler le PH brut pour recalcul
-                Dim phExistant As Double
-                Double.TryParse(If(combined(key).BDO.PH, "0").Replace(",", "."),
-                                Globalization.NumberStyles.Any,
-                                Globalization.CultureInfo.InvariantCulture, phExistant)
-                Dim phNouveau As Double
-                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
-                                Globalization.NumberStyles.Any,
-                                Globalization.CultureInfo.InvariantCulture, phNouveau)
-                combined(key).BDO.PH = RecalculatePH(phExistant + phNouveau, totalSACEM)
+                ' Cumuler le PH brut
+                phBruts(key) += phNouveau
             Else
                 Dim copie As New AyantDroit()
                 CopyAyantDroit(ayant, copie)
-                ' Recalculer le PH sur 100% de la part auteur SACEM
-                Dim phBrut As Double
-                Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),
-                                Globalization.NumberStyles.Any,
-                                Globalization.CultureInfo.InvariantCulture, phBrut)
-                copie.BDO.PH = RecalculatePH(phBrut, totalSACEM)
                 combined(key) = copie
+                phBruts(key) = phNouveau
+            End If
+        Next
+
+        ' Recalculer tous les PH en batch (arrondi 3 déc., total=100 garanti)
+        Dim phFormates As Dictionary(Of String, String) = RecalculatePHBatch(phBruts, totalSACEM)
+        For Each kvp In phFormates
+            If combined.ContainsKey(kvp.Key) Then
+                combined(kvp.Key).BDO.PH = kvp.Value
             End If
         Next
 

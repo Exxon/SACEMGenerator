@@ -193,9 +193,8 @@ Public Class BalisesGenerator
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-                Dim desigE As String = If(ayant.Identite.Designation, "").Trim()
-                If Not String.IsNullOrEmpty(desigE) AndAlso Not editeurs.Contains(desigE) Then
-                    editeurs.Add(desigE)
+                If Not editeurs.Contains(ayant.Identite.Designation) Then
+                    editeurs.Add(ayant.Identite.Designation)
                 End If
             End If
         Next
@@ -208,13 +207,10 @@ Public Class BalisesGenerator
         Dim editeursSansFormat As New List(Of String)
         For Each ayant In _data.AyantsDroit
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
-            If ayant.BDO.Role = "E" Then
+            If ayant.BDO.Role = "E" AndAlso ayant.Identite.Designation <> _data.Format Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
-                Dim desigSF As String = If(ayant.Identite.Designation, "").Trim()
-                If String.IsNullOrEmpty(desigSF) Then Continue For
-                If desigSF = If(_data.Format, "") Then Continue For
-                If Not editeursSansFormat.Contains(desigSF) Then
-                    editeursSansFormat.Add(desigSF)
+                If Not editeursSansFormat.Contains(ayant.Identite.Designation) Then
+                    editeursSansFormat.Add(ayant.Identite.Designation)
                 End If
             End If
         Next
@@ -230,9 +226,8 @@ Public Class BalisesGenerator
         For Each ayant In _data.AyantsDroit
             If Not IsSignataire(ayant) Then Continue For ' Exclure non-signataires
             If ayant.BDO.Role = "E" Then
-                Dim desigC As String = If(ayant.Identite.Designation, "").Trim()
-                If Not String.IsNullOrEmpty(desigC) AndAlso Not editeursCredits.Contains(desigC) Then
-                    editeursCredits.Add(desigC)
+                If Not editeursCredits.Contains(ayant.Identite.Designation) Then
+                    editeursCredits.Add(ayant.Identite.Designation)
                 End If
             End If
         Next
@@ -352,13 +347,11 @@ Public Class BalisesGenerator
             If ayant.BDO.Role = "E" Then
                 If Not IsSACEM(ayant) Then Continue For ' Exclure NON-SACEM
                 Dim ph As Double
-                Dim desigES As String = If(ayant.Identite.Designation, "").Trim()
-                If String.IsNullOrEmpty(desigES) Then Continue For
                 If Double.TryParse(ayant.BDO.PH, NumberStyles.Any, CultureInfo.InvariantCulture, ph) Then
-                    If pourcentagesParEditeur.ContainsKey(desigES) Then
-                        pourcentagesParEditeur(desigES) += ph
+                    If pourcentagesParEditeur.ContainsKey(ayant.Identite.Designation) Then
+                        pourcentagesParEditeur(ayant.Identite.Designation) += ph
                     Else
-                        pourcentagesParEditeur(desigES) = ph
+                        pourcentagesParEditeur(ayant.Identite.Designation) = ph
                     End If
                 End If
             End If
@@ -367,12 +360,58 @@ Public Class BalisesGenerator
         ' Calculer le total SACEM (sur 50%) pour recalculer sur 100% de la part éditoriale
         Dim totalSACEM As Double = pourcentagesParEditeur.Values.Sum()
 
-        ' Générer les lignes editsplit avec recalcul proportionnel sur 100%
+        ' Générer les lignes editsplit — arrondi 3 déc., snap, total=100 garanti
+        Dim orderedKeys = pourcentagesParEditeur.Keys.OrderByDescending(Function(k) pourcentagesParEditeur(k)).ToList()
+        Dim phRecalcules As New Dictionary(Of String, Double)
+
+        ' Étape 1 : arrondi 3 déc.
+        For Each key In orderedKeys
+            Dim ph As Double = If(totalSACEM > 0, pourcentagesParEditeur(key) / totalSACEM * 100, 0)
+            phRecalcules(key) = Math.Round(ph, 3)
+        Next
+
+        ' Étape 2 : snapper les valeurs à moins de 0.002 d'un arrondi 2-dec (ex: 25.001 -> 25.00)
+        For Each key In orderedKeys
+            Dim v As Double = phRecalcules(key)
+            Dim r2 As Double = Math.Round(v, 2)
+            If Math.Abs(v - r2) < 0.002 Then
+                phRecalcules(key) = r2
+            End If
+        Next
+
+        ' Étape 3 : distribuer l'écart par 0.001 sur les candidats à 3 dec réelles (desc)
+        Dim ecart As Double = Math.Round(100 - phRecalcules.Values.Sum(), 3)
+        If ecart <> 0 Then
+            Dim candidats As New List(Of String)
+            For Each key In orderedKeys
+                If Math.Round(phRecalcules(key), 2) <> phRecalcules(key) Then
+                    candidats.Add(key)
+                End If
+            Next
+            If candidats.Count = 0 Then
+                phRecalcules(orderedKeys.First()) = Math.Round(phRecalcules(orderedKeys.First()) + ecart, 3)
+            Else
+                Dim pas As Double = If(ecart > 0, 0.001, -0.001)
+                Dim nPas As Integer = CInt(Math.Round(Math.Abs(ecart) / 0.001))
+                For i As Integer = 0 To nPas - 1
+                    Dim k As String = candidats(i Mod candidats.Count)
+                    phRecalcules(k) = Math.Round(phRecalcules(k) + pas, 3)
+                Next
+            End If
+        End If
+
         Dim editsplit As New List(Of String)
-        For Each kvp In pourcentagesParEditeur.OrderByDescending(Function(x) x.Value)
-            Dim phRecalcule As Double = If(totalSACEM > 0, kvp.Value / totalSACEM * 100, 0)
-            Dim phText As String = NombreEnLettres(phRecalcule)
-            editsplit.Add($"{phRecalcule:F2}% ({phText} pour cent) : {kvp.Key}")
+        For Each key In orderedKeys
+            Dim phFinal As Double = phRecalcules(key)
+            Dim r2 As Double = Math.Round(phFinal, 2)
+            Dim phStr As String
+            If Math.Abs(phFinal - r2) < 0.0005 Then
+                phStr = r2.ToString("F2", CultureInfo.InvariantCulture).Replace(".", ",")
+            Else
+                phStr = phFinal.ToString("F3", CultureInfo.InvariantCulture).Replace(".", ",")
+            End If
+            Dim phText As String = NombreEnLettres(phFinal)
+            editsplit.Add($"{phStr}% ({phText} pour cent) : {key}")
         Next
 
         SetBalise("editsplit", String.Join(vbCrLf, editsplit))
@@ -619,20 +658,29 @@ Public Class BalisesGenerator
     ''' </summary>
     Private Function NombreEnLettres(nombre As Double) As String
         Try
-            ' Version simplifiée pour les pourcentages
-            Dim partieEntiere As Integer = CInt(Math.Floor(nombre))
-            Dim partieDecimale As Integer = CInt((nombre - partieEntiere) * 100)
+            ' Extraire parties entière et décimale via texte (évite erreurs flottantes)
+            Dim arrondi3 As Double = Math.Round(nombre, 3)
+            Dim partieEntiere As Integer = CInt(Math.Floor(arrondi3))
+            Dim txt As String = arrondi3.ToString("F3", Globalization.CultureInfo.InvariantCulture)
+            Dim dotIdx As Integer = txt.IndexOf(".")
+            Dim dec3 As String = If(dotIdx >= 0, txt.Substring(dotIdx + 1), "000") ' toujours 3 chiffres
 
             Dim result As String = ConvertirNombreEnLettres(partieEntiere)
 
-            If partieDecimale > 0 Then
-                result &= " virgule " & ConvertirNombreEnLettres(partieDecimale)
+            ' Supprimer les zéros finaux pour savoir combien de décimales significatives
+            Dim decStripped As String = dec3.TrimEnd("0"c)
+            If decStripped.Length > 0 Then
+                Dim decVal As Integer = Integer.Parse(dec3) ' 666, 500, 670, etc.
+                ' Lire les décimales comme entier (666 → "six cent soixante-six")
+                ' Mais si terminaison 0 (ex: 500 → "cinq cents"), ConvertirNombreEnLettres gère
+                Dim decStr As String = ConvertirNombreEnLettres(decVal)
+                result &= " virgule " & decStr
             End If
 
             Return result
 
         Catch
-            Return nombre.ToString("F2")
+            Return nombre.ToString("F3")
         End Try
     End Function
 
@@ -646,6 +694,16 @@ Public Class BalisesGenerator
 
         If nombre = 0 Then
             Return "zéro"
+        ElseIf nombre >= 100 Then
+            ' 100-999
+            Dim centaine As Integer = nombre \ 100
+            Dim reste As Integer = nombre Mod 100
+            Dim centStr As String = If(centaine = 1, "cent", units(centaine) & " cent")
+            If reste = 0 Then
+                Return centStr ' pas de "s" : contexte décimal (cinq cent, pas cinq cents)
+            Else
+                Return centStr & " " & ConvertirNombreEnLettres(reste)
+            End If
         ElseIf nombre < 10 Then
             Return units(nombre)
         ElseIf nombre < 20 Then
@@ -701,7 +759,7 @@ Public Class BalisesGenerator
     Private Function GetDisplayIdentifiant(ayant As AyantDroit) As String
         ' Pour les personnes morales, utiliser Designation
         If ayant.Identite.Type = "Moral" Then
-            Return If(ayant.Identite.Designation, "")
+            Return If(ayant.Identite.Designation, "").Trim().ToUpper()
         End If
 
         ' Pour les personnes physiques : Prenom NOM [dit PSEUDO]
@@ -719,7 +777,7 @@ Public Class BalisesGenerator
 
         ' Ajouter "dit PSEUDO" si pseudonyme renseigné
         If Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme) Then
-            result = $"{result} dit {ayant.Identite.Pseudonyme}".Trim()
+            result = $"{result} / {ayant.Identite.Pseudonyme.Trim().ToUpper()}".Trim()
         End If
 
         Return result

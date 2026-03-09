@@ -87,39 +87,36 @@ Public Class TableGenerator
             End If
         Next
 
-        ' Calculer la somme totale
-        Dim sommeTotal As Double = createursInfo.Values.Sum(Function(c) c.PH)
-        If sommeTotal = 0 Then sommeTotal = 1 ' Éviter division par zéro
+        ' Normaliser les PH en batch (arrondi 3 dec., total=100 garanti)
+        Dim phBruts1 As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+        For Each kvp In createursInfo
+            phBruts1(kvp.Key) = kvp.Value.PH
+        Next
+        Dim phNormes1 As Dictionary(Of String, Double) = NormaliserPHBatch(phBruts1)
 
         ' Lignes de données
-        Dim sommeCol1, sommeCol2, sommeCol3 As Double
-
         For Each kvp In createursInfo
             Dim info As CreatorInfo = kvp.Value
-            Dim phNorm As Double = (info.PH * 100) / sommeTotal
+            Dim phNorm As Double = If(phNormes1.ContainsKey(kvp.Key), phNormes1(kvp.Key), 0)
+            Dim phStr As String = FormatPHNorm(phNorm)
 
             ' Ligne de données - NE PAS COUPER
             Dim dataRow As New TableRow()
             dataRow.Append(New TableRowProperties(New CantSplit()))
-            ' Colonne 1 : Nom Prénom dit Pseudo (GRAS) + saut + Rôle (normal)
             dataRow.Append(CreateCreatorCellNoWrap(info, fontName, fontSize))
-            dataRow.Append(CreateCellMinWidth($"{phNorm:F2}%", False, True, fontName, fontSize, 1500))
-            dataRow.Append(CreateCellMinWidth($"{phNorm:F2}%", False, True, fontName, fontSize, 1500))
-            dataRow.Append(CreateCellMinWidth($"{phNorm:F2}%", False, True, fontName, fontSize, 1500))
+            dataRow.Append(CreateCellMinWidth(phStr, False, True, fontName, fontSize, 1500))
+            dataRow.Append(CreateCellMinWidth(phStr, False, True, fontName, fontSize, 1500))
+            dataRow.Append(CreateCellMinWidth(phStr, False, True, fontName, fontSize, 1500))
             table.Append(dataRow)
-
-            sommeCol1 += phNorm
-            sommeCol2 += phNorm
-            sommeCol3 += phNorm
         Next
 
         ' Ligne TOTAL (centrée) - NE PAS COUPER
         Dim totalRow As New TableRow()
         totalRow.Append(New TableRowProperties(New CantSplit()))
         totalRow.Append(CreateCellAutoWidth("TOTAL", True, False, fontName, fontSize))
-        totalRow.Append(CreateCellMinWidth($"{sommeCol1:F2}%", True, True, fontName, fontSize, 1500))
-        totalRow.Append(CreateCellMinWidth($"{sommeCol2:F2}%", True, True, fontName, fontSize, 1500))
-        totalRow.Append(CreateCellMinWidth($"{sommeCol3:F2}%", True, True, fontName, fontSize, 1500))
+        totalRow.Append(CreateCellMinWidth("100,00%", True, True, fontName, fontSize, 1500))
+        totalRow.Append(CreateCellMinWidth("100,00%", True, True, fontName, fontSize, 1500))
+        totalRow.Append(CreateCellMinWidth("100,00%", True, True, fontName, fontSize, 1500))
         table.Append(totalRow)
 
         Return table
@@ -195,28 +192,28 @@ Public Class TableGenerator
             End If
         Next
 
-        ' Calculer la somme totale
-        Dim sommeTotal As Double = createursInfo.Values.Sum(Function(c) c.PH)
-        If sommeTotal = 0 Then sommeTotal = 1
+        ' Normaliser les PH en batch (arrondi 3 dec., total=100 garanti)
+        Dim phBruts2 As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+        For Each kvp In createursInfo
+            phBruts2(kvp.Key) = kvp.Value.PH
+        Next
+        Dim phNormes2 As Dictionary(Of String, Double) = NormaliserPHBatch(phBruts2)
 
         ' Lignes de données
-        Dim sommes(5) As Double
-
         For Each kvp In createursInfo
             Dim info As CreatorInfo = kvp.Value
-            Dim phNorm As Double = (info.PH * 100) / sommeTotal
+            Dim phNorm As Double = If(phNormes2.ContainsKey(kvp.Key), phNormes2(kvp.Key), 0)
+            Dim phStr As String = FormatPHNorm(phNorm)
 
             ' Ligne de données - NE PAS COUPER
             Dim dataRow As New TableRow()
             dataRow.Append(New TableRowProperties(New CantSplit()))
-            ' Colonne 1 : Nom Prénom dit Pseudo (GRAS) + saut + Rôle (normal)
             dataRow.Append(CreateCreatorCellNoWrap(info, fontName, fontSize))
-            
+
             For i As Integer = 0 To 5
-                dataRow.Append(CreateCellMinWidth($"{phNorm:F2}%", False, True, fontName, fontSize, 900))
-                sommes(i) += phNorm
+                dataRow.Append(CreateCellMinWidth(phStr, False, True, fontName, fontSize, 900))
             Next
-            
+
             table.Append(dataRow)
         Next
 
@@ -225,7 +222,7 @@ Public Class TableGenerator
         totalRow.Append(New TableRowProperties(New CantSplit()))
         totalRow.Append(CreateCellAutoWidth("TOTAL", True, False, fontName, fontSize))
         For i As Integer = 0 To 5
-            totalRow.Append(CreateCellMinWidth($"{sommes(i):F2}%", True, True, fontName, fontSize, 900))
+            totalRow.Append(CreateCellMinWidth("100,00%", True, True, fontName, fontSize, 900))
         Next
         table.Append(totalRow)
 
@@ -1083,4 +1080,63 @@ Public Class TableGenerator
     Private Function IsSignataire(ayant As AyantDroit) As Boolean
         Return ayant.BDO.Signataire
     End Function
+    ''' <summary>
+    ''' Formate un PH normalise : 2 decimales si .xx0, sinon 3 decimales.
+    ''' </summary>
+    Private Shared Function FormatPHNorm(v As Double) As String
+        Dim r2 As Double = System.Math.Round(v, 2)
+        ' Tolérance : si l'écart est un artefact flottant (< 0.0015), arrondir à 2 déc.
+        If System.Math.Abs(v - r2) < 0.0015 Then
+            Return r2.ToString("F2", CultureInfo.InvariantCulture) & "%"
+        Else
+            Return v.ToString("F3", CultureInfo.InvariantCulture) & "%"
+        End If
+    End Function
+
+    ''' <summary>
+    ''' Recalcule un dict cle/phBrut sur 100%, arrondi 3 dec., total=100 garanti.
+    ''' </summary>
+    Private Shared Function NormaliserPHBatch(phBruts As Dictionary(Of String, Double)) As Dictionary(Of String, Double)
+        Dim result As New Dictionary(Of String, Double)(StringComparer.OrdinalIgnoreCase)
+        Dim total As Double = phBruts.Values.Sum()
+        If total = 0 Then Return result
+
+        ' Étape 1 : arrondi 3 decimales
+        For Each kvp In phBruts
+            result(kvp.Key) = System.Math.Round(kvp.Value / total * 100, 3)
+        Next
+
+        ' Étape 2 : snapper les valeurs a moins de 0.002 d'un arrondi 2-dec (ex: 25.001 -> 25.00)
+        For Each k In result.Keys.ToList()
+            Dim v As Double = result(k)
+            Dim r2 As Double = System.Math.Round(v, 2)
+            If System.Math.Abs(v - r2) < 0.002 Then
+                result(k) = r2
+            End If
+        Next
+
+        ' Étape 3 : distribuer l'ecart par 0.001 sur les candidats a 3 dec reelles (desc)
+        Dim ecart As Double = System.Math.Round(100 - result.Values.Sum(), 3)
+        If ecart <> 0 Then
+            Dim candidats As New List(Of String)
+            For Each kvp In result.OrderByDescending(Function(x) x.Value)
+                If System.Math.Round(kvp.Value, 2) <> kvp.Value Then
+                    candidats.Add(kvp.Key)
+                End If
+            Next
+            If candidats.Count = 0 Then
+                Dim maxKey As String = result.OrderByDescending(Function(x) x.Value).First().Key
+                result(maxKey) = System.Math.Round(result(maxKey) + ecart, 3)
+            Else
+                Dim pas As Double = If(ecart > 0, 0.001, -0.001)
+                Dim nPas As Integer = CInt(System.Math.Round(System.Math.Abs(ecart) / 0.001))
+                For i As Integer = 0 To nPas - 1
+                    Dim k As String = candidats(i Mod candidats.Count)
+                    result(k) = System.Math.Round(result(k) + pas, 3)
+                Next
+            End If
+        End If
+        Return result
+    End Function
+
 End Class

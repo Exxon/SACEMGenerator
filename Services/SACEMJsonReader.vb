@@ -49,8 +49,8 @@ Public Class SACEMJsonReader
             data.Commentaire = GetStringValue(jObject, "Commentaire")
             data.Faita = GetStringValue(jObject, "Faita")
             data.Faitle = GetStringValue(jObject, "Faitle")
-            data.Declaration = GetStringValue(jObject, "Declaration")
-            data.Format = GetStringValue(jObject, "Format")
+            data.Declaration = GetStringValue(jObject, "Declaration").Trim().ToUpper()
+            data.Format = GetStringValue(jObject, "Format").Trim().ToUpper()
 
             ' Parsing des ayants droit
             If jObject("AyantsDroit") IsNot Nothing Then
@@ -306,12 +306,12 @@ Public Class SACEMJsonReader
                         Function(r) r("Id").ToString().Trim().ToUpper() = id)
                     If row IsNot Nothing Then
                         ayant.Identite.Type = "Physique"
-                        ayant.Identite.Nom = XlsStr(row, "Nom")
-                        ayant.Identite.Prenom = XlsStr(row, "Prenom")
-                        ayant.Identite.Pseudonyme = XlsStr(row, "Pseudonyme")
+                        ayant.Identite.Nom = XlsStr(row, "Nom").Trim().ToUpper()
+                        ayant.Identite.Prenom = TitleCaseFr(XlsStr(row, "Prenom"))
+                        ayant.Identite.Pseudonyme = XlsStr(row, "Pseudonyme").Trim().ToUpper()
                         Dim desig As String = (ayant.Identite.Nom & " " & ayant.Identite.Prenom).Trim()
                         If Not String.IsNullOrEmpty(ayant.Identite.Pseudonyme) Then desig &= " / " & ayant.Identite.Pseudonyme
-                        ayant.Identite.Designation = desig
+                        ayant.Identite.Designation = desig.Trim()
                         ayant.Identite.Genre = XlsStr(row, "Genre")
                         ayant.Identite.Nele = XlsStr(row, "Date de naissance")
                         ayant.Identite.Nea = XlsStr(row, "Lieu de naissance")
@@ -339,7 +339,7 @@ Public Class SACEMJsonReader
                         ayant.Identite.Type = "Moral"
                         Dim sgMor As String = XlsStr(row, "SocieteGestion")
                         ayant.Identite.SocieteGestion = If(String.IsNullOrEmpty(sgMor), "SACEM", sgMor)
-                        ayant.Identite.Designation = XlsStr(row, "Designation")
+                        ayant.Identite.Designation = XlsStr(row, "Designation").Trim().ToUpper()
                         ayant.Identite.FormeJuridique = XlsStr(row, "Forme Juridique")
                         ayant.Identite.Capital = XlsStr(row, "Capital")
                         ayant.Identite.RCS = XlsStr(row, "RCS")
@@ -394,6 +394,21 @@ Public Class SACEMJsonReader
     Private Shared Function XlsStr(row As System.Data.DataRow, colName As String) As String
         If Not row.Table.Columns.Contains(colName) Then Return ""
         Return If(row(colName).ToString(), "").Trim()
+    End Function
+
+    Private Shared Function TitleCaseFr(s As String) As String
+        If String.IsNullOrEmpty(s) Then Return ""
+        Dim words = s.ToLower().Split(New Char() {" "c, "-"c, "'"c}, StringSplitOptions.None)
+        Dim result As New System.Text.StringBuilder()
+        Dim src = s.ToLower()
+        Dim i As Integer = 0
+        For Each word As String In s.ToLower().Split(" "c)
+            If result.Length > 0 Then result.Append(" ")
+            If Not String.IsNullOrEmpty(word) Then
+                result.Append(Char.ToUpper(word(0)) & word.Substring(1))
+            End If
+        Next
+        Return result.ToString()
     End Function
 
 End Class
