@@ -733,9 +733,16 @@ Public Class ContractGenerator
         ' Contrats à générer
         Dim contracts As New List(Of Tuple(Of String, String, String)) From {
             Tuple.Create("CCDAA_template.docx", $"CCDAA_{baseName}.docx", "CCDAA"),
-            Tuple.Create("CCEOM_template_univ.docx", $"CCEOM_{baseName}.docx", "CCEOM"),
-            Tuple.Create("COED_template_univ.docx", $"COED_{baseName}.docx", "COED")
+            Tuple.Create("CCEOM_template_univ.docx", $"CCEOM_{baseName}.docx", "CCEOM")
         }
+
+        ' COED uniquement si coédition réelle (≥1 éditeur SACEM signataire + ≥1 autre)
+        Dim superGenCheck As New SuperbaliseGenerator(data, paragraphReader)
+        If superGenCheck.IsCoedition() Then
+            contracts.Add(Tuple.Create("COED_template_univ.docx", $"COED_{baseName}.docx", "COED"))
+        Else
+            allLogs.Add("ℹ COED non généré : un seul éditeur (pas de coédition)")
+        End If
 
         For Each contract In contracts
             Dim templatePath As String = Path.Combine(templatesDirectory, contract.Item1)

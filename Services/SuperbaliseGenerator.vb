@@ -1047,18 +1047,20 @@ Public Class SuperbaliseGenerator
 
     ''' <summary>
     ''' Génère le bloc {MENTION_NONSACEM}
-    ''' Coédition + "l'EDITEUR"
+    ''' - Coédition (≥2 éditeurs dont SACEM signataire + autre) → template MENTION_NONSACEM (phrase "coéditée avec...")
+    ''' - Éditeur unique non-signataire sans co-éditeur SACEM → template MENTION_NONSACEM_SEUL (phrase simplifiée)
     ''' Utilisé dans : CCEOM Art.11, CCEOM Art.16, COED Art.3
     ''' </summary>
     Public Function GenerateMentionNonSACEM() As String
         Try
             If Not HasNonSACEM() Then Return ""
-            
-            Dim template As String = _paragraphReader.GetTemplate("MENTION_NONSACEM")
+
+            Dim templateName As String = If(IsCoedition(), "MENTION_NONSACEM", "MENTION_NONSACEM_SEUL")
+            Dim template As String = _paragraphReader.GetTemplate(templateName)
             If String.IsNullOrEmpty(template) Then Return ""
-            
+
             Return ApplyNonSACEMBalises(template)
-            
+
         Catch ex As Exception
             Debug.WriteLine($"Erreur GenerateMentionNonSACEM: {ex.Message}")
             Return ""
@@ -1067,18 +1069,20 @@ Public Class SuperbaliseGenerator
 
     ''' <summary>
     ''' Génère le bloc {LIST_NONSACEM}
-    ''' Non-signataire + "lettre de répartition ci-après annexée"
+    ''' - Contient au moins un non-SACEM → LIST_NONSACEM (mention "autre société de gestion")
+    ''' - SACEM non-signataire uniquement  → LIST_NONSACEM_SACEM (phrase simple)
     ''' Utilisé dans : CCEOM Art.16, COED Art.3
     ''' </summary>
     Public Function GenerateListNonSACEM() As String
         Try
             If Not HasNonSACEM() Then Return ""
-            
-            Dim template As String = _paragraphReader.GetTemplate("LIST_NONSACEM")
+
+            Dim templateName As String = If(HasNonSACEMStrict(), "LIST_NONSACEM", "LIST_NONSACEM_SACEM")
+            Dim template As String = _paragraphReader.GetTemplate(templateName)
             If String.IsNullOrEmpty(template) Then Return ""
-            
+
             Return ApplyNonSACEMBalises(template)
-            
+
         Catch ex As Exception
             Debug.WriteLine($"Erreur GenerateListNonSACEM: {ex.Message}")
             Return ""
@@ -1129,10 +1133,46 @@ Public Class SuperbaliseGenerator
     ''' </summary>
     Private Function HasNonSACEM() As Boolean
         For Each ayant In _data.AyantsDroit
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            If role <> "E" AndAlso role <> "A" AndAlso role <> "C" AndAlso role <> "AC" Then Continue For
             Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
-            If Not String.IsNullOrEmpty(societe) AndAlso societe <> "SACEM" Then
-                Return True
+            Dim isSACEM As Boolean = String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+            If Not isSACEM Then Return True
+            If isSACEM AndAlso Not ayant.BDO.Signataire Then Return True
+        Next
+        Return False
+    End Function
+
+    ''' <summary>
+    ''' Retourne True si l'œuvre est en coédition :
+    ''' au moins un éditeur SACEM signataire ET au moins un autre éditeur (non-SACEM ou non-signataire)
+    ''' </summary>
+    Public Function IsCoedition() As Boolean
+        Dim hasEditeurSACEMSignataire As Boolean = False
+        Dim hasEditeurAutre As Boolean = False
+        For Each ayant In _data.AyantsDroit
+            If ayant.BDO.Role?.Trim().ToUpper() <> "E" Then Continue For
+            Dim societe As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            Dim isSACEM As Boolean = String.IsNullOrEmpty(societe) OrElse societe = "SACEM"
+            If isSACEM AndAlso ayant.BDO.Signataire Then
+                hasEditeurSACEMSignataire = True
+            Else
+                hasEditeurAutre = True
             End If
+        Next
+        Return hasEditeurSACEMSignataire AndAlso hasEditeurAutre
+    End Function
+
+    ''' <summary>
+    ''' Retourne True s'il existe au moins un ayant droit non-SACEM (autre OGC)
+    ''' indépendamment du statut signataire.
+    ''' False si tous les "hors périmètre" sont des SACEM non-signataires.
+    ''' </summary>
+    Private Function HasNonSACEMStrict() As Boolean
+        For Each ayant In _data.AyantsDroit
+            Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
+            If role <> "E" AndAlso role <> "A" AndAlso role <> "C" AndAlso role <> "AC" Then Continue For
+            If Not isSACEMMember(ayant) Then Return True
         Next
         Return False
     End Function
@@ -1154,6 +1194,9 @@ Public Class SuperbaliseGenerator
         For Each ayant In _data.AyantsDroit
             Dim societe As String = If(ayant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
             Dim isSACEM As Boolean = (societe = "SACEM" OrElse String.IsNullOrEmpty(societe))
+            Dim isSignataire As Boolean = ayant.BDO.Signataire
+            ' SACEM non-signataire → traité comme non-SACEM dans le contrat
+            Dim compteCommeSACEM As Boolean = isSACEM AndAlso isSignataire
             Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
             Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
             Dim isE As Boolean = (role = "E")
@@ -1162,9 +1205,8 @@ Public Class SuperbaliseGenerator
             Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."), Globalization.NumberStyles.Any, Globalization.CultureInfo.InvariantCulture, ph)
             
             Dim displayName As String = GetDisplayName(ayant)
-            Dim societeAffichage As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
             
-            If isSACEM Then
+            If compteCommeSACEM Then
                 partsSACEM += ph
                 If isAC AndAlso Not listeAC_SACEM.Contains(displayName) Then
                     listeAC_SACEM.Add(displayName)
@@ -1175,7 +1217,9 @@ Public Class SuperbaliseGenerator
             Else
                 partsNonSACEM += ph
                 countNonSACEM += 1
-                Dim nomAvecSociete As String = $"{displayName} ({societeAffichage})"
+                ' Suffixe : société si non-SACEM, "(non signataire)" si SACEM non-signataire
+                Dim suffixe As String = If(isSACEM, "non signataire", societe)
+                Dim nomAvecSociete As String = $"{displayName} ({suffixe})"
                 If Not listeNonSACEM.Contains(nomAvecSociete) Then
                     listeNonSACEM.Add(nomAvecSociete)
                 End If
@@ -1183,18 +1227,19 @@ Public Class SuperbaliseGenerator
                     listeNonSACEM_Noms.Add(displayName)
                 End If
                 
-                ' Détecter éditeur étranger qui édite un AC SACEM
+                ' Détecter éditeur étranger/non-signataire qui édite un AC SACEM signataire
                 If isE Then
                     Dim lettrage As String = If(ayant.BDO.Lettrage, "").Trim().ToUpper()
                     If Not String.IsNullOrEmpty(lettrage) Then
                         For Each autreAyant In _data.AyantsDroit
                             Dim autreSociete As String = If(autreAyant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
                             Dim autreIsSACEM As Boolean = (autreSociete = "SACEM" OrElse String.IsNullOrEmpty(autreSociete))
+                            Dim autreIsSignataire As Boolean = autreAyant.BDO.Signataire
                             Dim autreRole As String = If(autreAyant.BDO.Role, "").Trim().ToUpper()
                             Dim autreIsAC As Boolean = (autreRole = "A" OrElse autreRole = "C" OrElse autreRole = "AC" OrElse autreRole = "AR" OrElse autreRole = "AD")
                             Dim autreLettrage As String = If(autreAyant.BDO.Lettrage, "").Trim().ToUpper()
                             
-                            If autreIsSACEM AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
+                            If autreIsSACEM AndAlso autreIsSignataire AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
                                 editeurDeInfo = $" éditeur de {GetDisplayName(autreAyant)}"
                                 Exit For
                             End If
@@ -1211,18 +1256,26 @@ Public Class SuperbaliseGenerator
         Dim strListeESACEM As String = FormatListeEt(listeESACEM)
         Dim strListeNonSACEM As String = FormatListeEt(listeNonSACEM)
         Dim strListeNonSACEM_Noms As String = FormatListeEt(listeNonSACEM_Noms)
-        
+        ' Tous les signataires (AC + E SACEM signataires) pour [ListeSignataires]
+        Dim listeSignataires As New List(Of String)
+        listeSignataires.AddRange(listeAC_SACEM)
+        For Each nom In listeESACEM
+            If Not listeSignataires.Contains(nom) Then listeSignataires.Add(nom)
+        Next
+        Dim strListeSignataires As String = FormatListeEt(listeSignataires)
+
         ' Pluriel/Singulier
         Dim isPluriel As Boolean = (countNonSACEM > 1)
         Dim strEstSont As String = If(isPluriel, "sont", "est")
         Dim strIlIls As String = If(isPluriel, "Ils", "Il")
         Dim strNestPas As String = If(isPluriel, "ne sont pas", "n'est pas")
         Dim strPluriel As String = If(isPluriel, "s", "")
-        
+
         ' Remplacer les balises dans le template
         Dim result As String = template
         result = result.Replace("[ListeAC_SACEM]", strListeAC_SACEM)
         result = result.Replace("[ListeE_SACEM]", strListeESACEM)
+        result = result.Replace("[ListeSignataires]", strListeSignataires)
         result = result.Replace("[ListeNonSACEM]", strListeNonSACEM)
         result = result.Replace("[ListeNonSACEM_Noms]", strListeNonSACEM_Noms)
         result = result.Replace("[PartsSACEM]", strPartsSACEM)
@@ -1277,7 +1330,7 @@ Public Class SuperbaliseGenerator
             Dim noms As New List(Of String)
 
             For Each ayant In _data.AyantsDroit
-                If Not ayant.BDO.Signataire Then Continue For
+                If ayant.BDO.Signataire Then Continue For  ' collecter les NON-signataires
 
                 Dim ph As Double = 0
                 Double.TryParse(If(ayant.BDO.PH, "0").Replace(",", "."),

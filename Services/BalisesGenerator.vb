@@ -452,6 +452,11 @@ Public Class BalisesGenerator
         For Each ayant In _data.AyantsDroit
             Dim societe As String = If(ayant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
             Dim isSACEM As Boolean = (societe = "SACEM" OrElse String.IsNullOrEmpty(societe))
+            Dim isSignataire As Boolean = ayant.BDO.Signataire
+
+            ' Un non-signataire SACEM est traité comme non-SACEM pour les balises NonSACEM
+            ' (il ne signe pas → il apparaît dans les listes "hors SACEM" du contrat)
+            Dim compteCommeSACEM As Boolean = isSACEM AndAlso isSignataire
             Dim role As String = If(ayant.BDO.Role, "").Trim().ToUpper()
             Dim isAC As Boolean = (role = "A" OrElse role = "C" OrElse role = "AC" OrElse role = "AR" OrElse role = "AD")
             Dim isE As Boolean = (role = "E")
@@ -462,10 +467,10 @@ Public Class BalisesGenerator
 
             ' Nom d'affichage
             Dim displayName As String = GetDisplayIdentifiant(ayant)
-            Dim societeAffichage As String = If(ayant.Identite.SocieteGestion, "").Trim().ToUpper()
+            ' (societeAffichage remplacé par suffixeSociete calculé dans le bloc Else)
 
-            If isSACEM Then
-                ' MEMBRE SACEM
+            If compteCommeSACEM Then
+                ' MEMBRE SACEM SIGNATAIRE
                 partsSACEM += ph
 
                 If isAC AndAlso Not acSACEM.Contains(displayName) Then
@@ -474,11 +479,18 @@ Public Class BalisesGenerator
                     eSACEM.Add(displayName)
                 End If
             Else
-                ' MEMBRE NON-SACEM
+                ' NON-SACEM ou SACEM NON-SIGNATAIRE
                 partsNonSACEM += ph
                 countNonSACEM += 1
 
-                Dim nomAvecSociete As String = $"{displayName} ({societeAffichage})"
+                ' Pour l'affichage : indiquer la société si non-SACEM, ou "(non signataire)" si SACEM non-signataire
+                Dim suffixeSociete As String
+                If isSACEM Then
+                    suffixeSociete = "non signataire"
+                Else
+                    suffixeSociete = societe
+                End If
+                Dim nomAvecSociete As String = $"{displayName} ({suffixeSociete})"
 
                 If isAC Then
                     If Not acNonSACEM.Contains(nomAvecSociete) Then
@@ -502,11 +514,12 @@ Public Class BalisesGenerator
                         For Each autreAyant In _data.AyantsDroit
                             Dim autreSociete As String = If(autreAyant.Identite.SocieteGestion, "SACEM").Trim().ToUpper()
                             Dim autreIsSACEM As Boolean = (autreSociete = "SACEM" OrElse String.IsNullOrEmpty(autreSociete))
+                            Dim autreIsSignataire As Boolean = autreAyant.BDO.Signataire
                             Dim autreRole As String = If(autreAyant.BDO.Role, "").Trim().ToUpper()
                             Dim autreIsAC As Boolean = (autreRole = "A" OrElse autreRole = "C" OrElse autreRole = "AC" OrElse autreRole = "AR" OrElse autreRole = "AD")
                             Dim autreLettrage As String = If(autreAyant.BDO.Lettrage, "").Trim().ToUpper()
 
-                            If autreIsSACEM AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
+                            If autreIsSACEM AndAlso autreIsSignataire AndAlso autreIsAC AndAlso autreLettrage = lettrage Then
                                 editeurDeInfo = $" éditeur de {GetDisplayIdentifiant(autreAyant)}"
                                 Exit For
                             End If

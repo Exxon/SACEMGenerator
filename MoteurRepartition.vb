@@ -7,13 +7,15 @@ Imports System.Data
 '''
 ''' Règles implémentées :
 '''   - Art. 57     : DEP tiers égaux auteur/compositeur/éditeur
-'''   - Art. 58     : DEP inédit sans éditeur
+'''   - Art. 58     : DEP inédit (part inédite INDIVIDUELLE par créateur)
 '''   - Art. 66     : DEP avec adaptateur
 '''   - Art. 70     : DEP avec arrangeur (et exception film/symphonique)
 '''   - Art. 76     : DR protégé (avec/sans arrangeur/adaptateur)
 '''   - Art. 77     : DR domaine public
-'''   - Règle MIN   : Part DR éditeurs = MIN(50%, somme PH éditeurs)
-'''                   Delta redistribué sur auteurs + compositeurs
+'''   - Règle MIN   : Part DR éditeur = MIN(part statutaire, somme PH éditeurs du groupe)
+'''                   Delta redistribué AU créateur du même lettrage (pas globalement)
+'''   - Part inédite : créateur sans éditeur = part créateur + part éditeur imputable
+'''                    (calculé par lettrage, indépendamment des autres créateurs)
 '''   - Partage interne égalitaire ou inégalitaire (pondération PH)
 ''' </summary>
 Public Class MoteurRepartition
@@ -54,18 +56,29 @@ Public Class MoteurRepartition
     ''' <summary>
     ''' Calcule les parts DEP et DR pour tous les ayants droit.
     ''' Met à jour directement les colonnes DE et DR du DataTable.
+    '''
+    ''' RÈGLE PART INÉDITE (par créateur) :
+    '''   Si un A ou C n'a pas d'éditeur associé (aucun E avec son lettrage),
+    '''   il récupère sa propre part d'éditeur statutaire en plus de sa part créateur.
+    '''   Ce calcul est fait INDIVIDUELLEMENT par lettrage, pas globalement.
+    '''
+    '''   Exemple : 1A sans éditeur + 1C avec éditeur
+    '''     Part statutaire : A=33.333, C=33.333, E=33.333
+    '''     → A (inédit) récupère la part éditeur qui lui est imputable = 33.333/2 * 1
+    '''       (le 1/3 éditeur se répartit entre les créateurs proportionnellement)
+    '''     Résultat : A DEP=50, C DEP=33.333, E DEP=16.667
+    '''
+    '''   De même pour DR : le delta MIN(50%, PHEditeur) s'applique par groupe lettrage.
     ''' </summary>
-    ''' <param name="dt">DataTable DtDepotCreateur</param>
-    ''' <param name="params">Paramètres de l'œuvre</param>
     Public Shared Sub Calculer(dt As DataTable, params As ParamsOeuvre)
         If dt Is Nothing OrElse dt.Rows.Count = 0 Then Return
 
         ' 1. Recenser les ayants droit par catégorie
-        Dim lignesA  As New List(Of DataRow)()   ' Auteurs
-        Dim lignesC  As New List(Of DataRow)()   ' Compositeurs
-        Dim lignesE  As New List(Of DataRow)()   ' Éditeurs
-        Dim lignesAR As New List(Of DataRow)()   ' Arrangeurs
-        Dim lignesAD As New List(Of DataRow)()   ' Adaptateurs
+        Dim lignesA  As New List(Of DataRow)()
+        Dim lignesC  As New List(Of DataRow)()
+        Dim lignesE  As New List(Of DataRow)()
+        Dim lignesAR As New List(Of DataRow)()
+        Dim lignesAD As New List(Of DataRow)()
 
         For Each row As DataRow In dt.Rows
             Select Case row("Role").ToString().Trim().ToUpper()
@@ -82,45 +95,201 @@ Public Class MoteurRepartition
         Dim nbE  As Integer = lignesE.Count
         Dim nbAR As Integer = lignesAR.Count
         Dim nbAD As Integer = lignesAD.Count
-
         Dim aArrangeur  As Boolean = nbAR > 0
         Dim aAdaptateur As Boolean = nbAD > 0
 
-        ' 2. Somme des PH éditeurs (pour règle DR MIN 50%)
-        Dim sommePHEditeurs As Double = 0
-        For Each row As DataRow In lignesE
-            sommePHEditeurs += ParsePH(row)
+        ' 2. Identifier quels lettrages ont un éditeur
+        Dim lettragesAvecEditeur As New HashSet(Of String)(
+            lignesE.Select(Function(r) r("Lettrage").ToString().Trim()))
+
+        ' 3. Calculer les parts statutaires globales (comme si tout était édité)
+        '    nbE fictif = nbA + nbC pour le calcul statutaire de base
+        Dim nbA_fict  As Integer = nbA
+        Dim nbC_fict  As Integer = nbC
+        Dim nbE_fict  As Integer = nbA + nbC  ' 1 éditeur fictif par créateur pour les parts statutaires
+
+        ' Parts statutaires DEP : A=1/3, C=1/3, E=1/3 (si A+C présents)
+        ' On calcule la part éditeur imputable à chaque catégorie créateur
+        Dim nbCreateursCats As Integer = If(nbA > 0, 1, 0) + If(nbC > 0, 1, 0)
+        Dim partStatutaireEditeurTotal As Double = If(nbCreateursCats > 0 AndAlso nbE > 0, 100.0 / 3.0, 0)
+        ' Part éditeur imputable à chaque catégorie créateur (A ou C) = partEditeurTotal / nbCreateursCats
+        Dim partEditeurParCatCreateur As Double = If(nbCreateursCats > 0, partStatutaireEditeurTotal / nbCreateursCats, 0)
+
+        ' Parts statutaires DR : A=25%, C=25%, E=50% (avec A+C)
+        Dim partStatutaireDRETotal As Double = If(nbE > 0, 50.0, 0)
+        Dim partDREditeurParCatCreateur As Double = If(nbCreateursCats > 0, partStatutaireDRETotal / nbCreateursCats, 0)
+
+        ' 4. Calculer parts DEP/DR effectives par créateur individuel
+        '    Créateur sans éditeur → récupère sa part + part éditeur imputable
+        '    Créateur avec éditeur → part normale, éditeur reçoit sa part
+        Dim depParCreateurA As New Dictionary(Of DataRow, Double)()
+        Dim depParCreateurC As New Dictionary(Of DataRow, Double)()
+        Dim drParCreateurA  As New Dictionary(Of DataRow, Double)()
+        Dim drParCreateurC  As New Dictionary(Of DataRow, Double)()
+
+        ' Réductions sur la part créateur dues aux arrangeurs/adaptateurs
+        Dim reductionDEP_A As Double = 0, reductionDEP_C As Double = 0
+        Dim reductionDR_A  As Double = 0, reductionDR_C  As Double = 0
+
+        ' Ajustements arrangeur/adaptateur DEP
+        Dim depAR As Double = 0, depAD As Double = 0
+        Dim drAR  As Double = 0, drAD  As Double = 0
+
+        If Not params.EstDomainePublic Then
+            If aArrangeur Then
+                Dim fracAR_dep As Double = If(params.EstFilmOuSymphonique, 4.0 / 24.0, 2.0 / 24.0)
+                depAR = fracAR_dep * 100.0
+                Dim redAR As Double = If(nbCreateursCats > 0, depAR / nbCreateursCats, 0)
+                reductionDEP_A += If(nbA > 0, redAR, 0)
+                reductionDEP_C += If(nbC > 0, redAR, 0)
+                Dim fracAR_dr As Double = If(params.EstFilmOuSymphonique, 12.5, 6.25)
+                drAR = fracAR_dr
+                Dim redDR_AR As Double = If(nbCreateursCats > 0, drAR / nbCreateursCats, 0)
+                reductionDR_A += If(nbA > 0, redDR_AR, 0)
+                reductionDR_C += If(nbC > 0, redDR_AR, 0)
+            End If
+            If aAdaptateur Then
+                Dim fracAD_dep As Double = 2.0 / 24.0
+                depAD = fracAD_dep * 100.0
+                Dim redAD As Double = If(nbCreateursCats > 0, depAD / nbCreateursCats, 0)
+                reductionDEP_A += If(nbA > 0, redAD, 0)
+                reductionDEP_C += If(nbC > 0, redAD, 0)
+                Dim fracAD_dr As Double = 12.5
+                drAD = fracAD_dr
+                Dim redDR_AD As Double = If(nbCreateursCats > 0, drAD / nbCreateursCats, 0)
+                reductionDR_A += If(nbA > 0, redDR_AD, 0)
+                reductionDR_C += If(nbC > 0, redDR_AD, 0)
+            End If
+        End If
+
+        ' 5. Appliquer part inédite individuelle par créateur
+        '    Formule : part_individuelle = part_totale_categorie / (nbCats × nbMembres)
+        '    Bonus inédit = part_ed_totale / (nbCats × nbMembres_catégorie)
+        '    (prorata de la part éditeur imputable à ce créateur spécifiquement)
+        For Each row As DataRow In lignesA
+            Dim lettrage As String = row("Lettrage").ToString().Trim()
+            Dim aEditeurIndiv As Boolean = lettragesAvecEditeur.Contains(lettrage)
+            Dim depIndiv As Double = (100.0 - partStatutaireEditeurTotal) / (nbCreateursCats * nbA) - reductionDEP_A / nbA
+            Dim drIndiv  As Double = (100.0 - partStatutaireDRETotal)     / (nbCreateursCats * nbA) - reductionDR_A  / nbA
+            Dim bonusDEP As Double = If(Not aEditeurIndiv, partStatutaireEditeurTotal / (nbCreateursCats * nbA), 0)
+            Dim bonusDR  As Double = If(Not aEditeurIndiv, partStatutaireDRETotal     / (nbCreateursCats * nbA), 0)
+            depParCreateurA(row) = depIndiv + bonusDEP
+            drParCreateurA(row)  = drIndiv  + bonusDR
         Next
 
-        ' 3. Calculer parts catégories DEP
-        Dim depA  As Double = 0
-        Dim depC  As Double = 0
-        Dim depE  As Double = 0
-        Dim depAR As Double = 0
-        Dim depAD As Double = 0
+        For Each row As DataRow In lignesC
+            Dim lettrage As String = row("Lettrage").ToString().Trim()
+            Dim aEditeurIndiv As Boolean = lettragesAvecEditeur.Contains(lettrage)
+            Dim depIndiv As Double = (100.0 - partStatutaireEditeurTotal) / (nbCreateursCats * nbC) - reductionDEP_C / nbC
+            Dim drIndiv  As Double = (100.0 - partStatutaireDRETotal)     / (nbCreateursCats * nbC) - reductionDR_C  / nbC
+            Dim bonusDEP As Double = If(Not aEditeurIndiv, partStatutaireEditeurTotal / (nbCreateursCats * nbC), 0)
+            Dim bonusDR  As Double = If(Not aEditeurIndiv, partStatutaireDRETotal     / (nbCreateursCats * nbC), 0)
+            depParCreateurC(row) = depIndiv + bonusDEP
+            drParCreateurC(row)  = drIndiv  + bonusDR
+        Next
 
-        CalculerPartsDEP(params, nbA, nbC, nbE, aArrangeur, aAdaptateur,
-                         depA, depC, depE, depAR, depAD)
+        ' 6. Pour les éditeurs : DEP/DR = part imputable au créateur de leur groupe
+        '    Part éditeur du groupe = part_ed_totale / (nbCats × nb_membres_catégorie_du_créateur)
+        '    DR éditeur : règle MIN(part statutaire groupe, sommePH éditeurs du groupe)
+        '                 delta DR → redistribué au créateur du même lettrage
+        Dim depEditeurParGroupe As New Dictionary(Of String, Double)()
+        Dim drEditeurParGroupe  As New Dictionary(Of String, Double)()
 
-        ' 4. Calculer parts catégories DR
-        Dim drA  As Double = 0
-        Dim drC  As Double = 0
-        Dim drE  As Double = 0
-        Dim drAR As Double = 0
-        Dim drAD As Double = 0
+        Dim lettragesEditeurs = lignesE.Select(Function(r) r("Lettrage").ToString().Trim()).Distinct().ToList()
+        For Each lettrage As String In lettragesEditeurs
+            Dim edsDuGroupe = lignesE.Where(Function(r) r("Lettrage").ToString().Trim() = lettrage).ToList()
+            Dim sommePHGroupe As Double = edsDuGroupe.Sum(Function(r) ParsePH(r))
 
-        CalculerPartsDR(params, nbA, nbC, nbE, aArrangeur, aAdaptateur,
-                        sommePHEditeurs,
-                        drA, drC, drE, drAR, drAD)
+            ' Identifier la catégorie et nb membres du créateur associé
+            Dim nbMembresCatCrea As Integer = 1
+            For Each r As DataRow In lignesA
+                If r("Lettrage").ToString().Trim() = lettrage Then nbMembresCatCrea = nbA : Exit For
+            Next
+            For Each r As DataRow In lignesC
+                If r("Lettrage").ToString().Trim() = lettrage Then nbMembresCatCrea = nbC : Exit For
+            Next
 
-        ' 5. Répartir en interne par catégorie et écrire dans le DataTable
-        RepartirCategorie(lignesA,  depA,  drA,  params.Inegalitaire, dt)
-        RepartirCategorie(lignesC,  depC,  drC,  params.Inegalitaire, dt)
-        RepartirEditeurs (lignesE,  depE,  drE,  sommePHEditeurs, params.Inegalitaire, dt)
+            Dim depGroupe As Double = partStatutaireEditeurTotal / (nbCreateursCats * nbMembresCatCrea)
+            Dim drStat    As Double = partStatutaireDRETotal      / (nbCreateursCats * nbMembresCatCrea)
+            Dim drEffectif As Double = Math.Min(drStat, sommePHGroupe)
+            Dim deltaGroupe As Double = drStat - drEffectif
+
+            depEditeurParGroupe(lettrage) = depGroupe
+            drEditeurParGroupe(lettrage)  = drEffectif
+
+            ' Redistribuer delta DR au créateur du groupe (par lettrage = 1 créateur spécifique)
+            If deltaGroupe > 0 Then
+                For Each r As DataRow In lignesA
+                    If r("Lettrage").ToString().Trim() = lettrage Then
+                        drParCreateurA(r) = drParCreateurA(r) + deltaGroupe
+                    End If
+                Next
+                For Each r As DataRow In lignesC
+                    If r("Lettrage").ToString().Trim() = lettrage Then
+                        drParCreateurC(r) = drParCreateurC(r) + deltaGroupe
+                    End If
+                Next
+            End If
+        Next
+
+        ' 7. Écrire les parts dans le DataTable
+        '    Note : depParCreateurA/C contiennent déjà les parts individuelles correctes
+        '    En mode inégalitaire avec plusieurs membres de même catégorie :
+        '    redistribuer le total catégorie (hors bonus inédit) selon PH
+        For Each row As DataRow In lignesA
+            EcrirePartsRow(row, depParCreateurA(row), drParCreateurA(row), dt)
+        Next
+        For Each row As DataRow In lignesC
+            EcrirePartsRow(row, depParCreateurC(row), drParCreateurC(row), dt)
+        Next
+
+        ' Éditeurs : égalitaire ou inégalitaire (par PH) selon params.Inegalitaire
+        For Each lettrage As String In lettragesEditeurs
+            Dim edsDuGroupe = lignesE.Where(Function(r) r("Lettrage").ToString().Trim() = lettrage).ToList()
+            Dim depGroupe As Double = depEditeurParGroupe(lettrage)
+            Dim drGroupe  As Double = drEditeurParGroupe(lettrage)
+            If Not params.Inegalitaire OrElse edsDuGroupe.Count = 1 Then
+                ' Égalitaire : parts égales entre les éditeurs du groupe
+                Dim depIndiv As Double = depGroupe / edsDuGroupe.Count
+                Dim drIndiv  As Double = drGroupe  / edsDuGroupe.Count
+                For Each row As DataRow In edsDuGroupe
+                    EcrirePartsRow(row, depIndiv, drIndiv, dt)
+                Next
+            Else
+                ' Inégalitaire : pondération par PH dans le groupe
+                Dim sommePHGroupe As Double = edsDuGroupe.Sum(Function(r) ParsePH(r))
+                For Each row As DataRow In edsDuGroupe
+                    Dim ph As Double = ParsePH(row)
+                    Dim w As Double = If(sommePHGroupe > 0, ph / sommePHGroupe, 1.0 / edsDuGroupe.Count)
+                    EcrirePartsRow(row, depGroupe * w, drGroupe * w, dt)
+                Next
+            End If
+        Next
+
+        ' Arrangeurs / Adaptateurs : égalitaire
         RepartirCategorie(lignesAR, depAR, drAR, params.Inegalitaire, dt)
         RepartirCategorie(lignesAD, depAD, drAD, params.Inegalitaire, dt)
 
-        ' 6. Arrondir PH à 3 décimales et ajuster dernier pour total = 100
+        ' 8. Domaine public : déléguer à l'ancienne logique
+        If params.EstDomainePublic Then
+            Dim depA2 As Double = 0, depC2 As Double = 0, depE2 As Double = 0
+            Dim depAR2 As Double = 0, depAD2 As Double = 0
+            Dim drA2  As Double = 0, drC2  As Double = 0, drE2  As Double = 0
+            Dim drAR2 As Double = 0, drAD2 As Double = 0
+            Dim sommePHEditeurs As Double = lignesE.Sum(Function(r) ParsePH(r))
+            CalculerPartsDEP(params, nbA, nbC, nbE, aArrangeur, aAdaptateur,
+                             depA2, depC2, depE2, depAR2, depAD2)
+            CalculerPartsDR(params, nbA, nbC, nbE, aArrangeur, aAdaptateur,
+                            sommePHEditeurs, drA2, drC2, drE2, drAR2, drAD2)
+            RepartirCategorie(lignesA,  depA2, drA2, params.Inegalitaire, dt)
+            RepartirCategorie(lignesC,  depC2, drC2, params.Inegalitaire, dt)
+            Dim sommePHE2 As Double = lignesE.Sum(Function(r) ParsePH(r))
+            RepartirEditeurs(lignesE, depE2, drE2, sommePHE2, params.Inegalitaire, dt)
+            RepartirCategorie(lignesAR, depAR2, drAR2, params.Inegalitaire, dt)
+            RepartirCategorie(lignesAD, depAD2, drAD2, params.Inegalitaire, dt)
+        End If
+
+        ' 9. Arrondir et ajuster totaux à 100
         AjusterTotal100(dt, "PH")
         AjusterTotal100(dt, "DE")
         AjusterTotal100(dt, "DR")

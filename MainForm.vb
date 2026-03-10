@@ -944,9 +944,16 @@ Public Class MainForm
             txtLog.AppendText($"{vbCrLf}=== GENERATION CONTRATS ==={vbCrLf}")
             Dim templates As New Dictionary(Of String, String) From {
                 {"CCDAA", Path.Combine(_templatesDirectory, "CCDAA_template.docx")},
-                {"CCEOM", Path.Combine(_templatesDirectory, "CCEOM_template_univ.docx")},
-                {"COED", Path.Combine(_templatesDirectory, "COED_template_univ.docx")}
+                {"CCEOM", Path.Combine(_templatesDirectory, "CCEOM_template_univ.docx")}
             }
+
+            ' COED uniquement si coédition réelle
+            Dim superGenCheck As New SuperbaliseGenerator(_currentData, _paragraphReader)
+            If superGenCheck.IsCoedition() Then
+                templates.Add("COED", Path.Combine(_templatesDirectory, "COED_template_univ.docx"))
+            Else
+                txtLog.AppendText($"ℹ COED non généré : un seul éditeur (pas de coédition){vbCrLf}")
+            End If
             Dim missing As New List(Of String)
             For Each kvp In templates
                 If Not File.Exists(kvp.Value) Then missing.Add(kvp.Key)
