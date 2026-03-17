@@ -1,0 +1,56 @@
+﻿{
+  "Titre": "Felix Eboué",
+  "SousTitre": "",
+  "Interprete": "BOOBA",
+  "Duree": "2:27",
+  "Genre": "Chant",
+  "Date": "10/03/2017",
+  "ISWC": "",
+  "Lieu": "Deezer / Spotify / Amazon Music / Youtube/ Apple Music",
+  "Territoire": "Monde",
+  "Arrangement": "",
+  "Inegalitaire": "TRUE",
+  "Declaration": "ETAT MAJOR",
+  "Format": "ETAT MAJOR",
+  "Faita": "Paris",
+  "Faitle": "09/03/2026",
+  "Commentaire": "",
+  "AyantsDroit": [
+    {
+      "Id": "P00190",
+      "Role": "C",
+      "Lettrage": "A",
+      "PH": "25",
+      "DE": "33.333",
+      "DR": "25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "IPI : 00673857006"
+    },
+    {
+      "Id": "M00023",
+      "Role": "E",
+      "Lettrage": "A",
+      "PH": "25",
+      "DE": "16.667",
+      "DR": "25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "COAD : 1470897"
+    },
+    {
+      "Id": "P00192",
+      "Role": "A",
+      "Lettrage": "B",
+      "PH": "50",
+      "DE": "50",
+      "DR": "50",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": false,
+      "COAD_IPI": "IPI : 00480382061"
+    }
+  ]
+}

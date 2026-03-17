@@ -39,14 +39,14 @@ Public Class PersonnesForm
     ' Colonnes PERSONNEPHYSIQUE
     Public Shared ReadOnly ColsPhy As String() = {
         "Id", "Pseudonyme", "Nom", "Prenom", "Genre", "Role",
-        "COAD", "IPI", "IPI 2", "SocieteGestion", "Editeur",
+        "COAD", "IPI_LIST", "SocieteGestion", "Editeur",
         "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Pays",
         "Mail", "Tel", "Date de naissance", "Lieu de naissance", "N Secu"
     }
 
     ' Colonnes PERSONNEMORALE
     Public Shared ReadOnly ColsMor As String() = {
-        "Id", "Designation", "COAD", "IPI", "Forme Juridique", "Capital",
+        "Id", "Designation", "COAD", "IPI_LIST", "Forme Juridique", "Capital",
         "RCS", "Siren", "SocieteGestion",
         "Num de voie", "Type de voie", "Nom de voie", "CP", "Ville", "Pays",
         "Prenom representant", "Nom representant", "Fonction representant",
@@ -281,7 +281,7 @@ Public Class PersonnesForm
         Dim widths As New Dictionary(Of String, Integer) From {
             {"Id", 72}, {"Pseudonyme", 110}, {"Nom", 110}, {"Prenom", 95},
             {"Genre", 50}, {"SocieteGestion", 80}, {"Role", 45},
-            {"Editeur", 180}, {"COAD", 80}, {"IPI", 100},
+            {"Editeur", 180}, {"COAD", 80}, {"IPI_LIST", 220},
             {"Designation", 210}, {"Forme Juridique", 100}, {"Capital", 70},
             {"RCS", 80}, {"Siren", 95},
             {"Num de voie", 60}, {"Type de voie", 80}, {"Nom de voie", 150},
@@ -370,8 +370,7 @@ Public Class PersonnesForm
                 nr("Genre")                = f.ResultGenre
                 nr("Role")                 = String.Join("+", f.Roles)
                 nr("COAD")                 = f.ResultCOAD
-                nr("IPI")                  = f.ResultIPI
-                nr("IPI 2")                = f.ResultIPI2
+                nr("IPI_LIST")             = f.ResultIPIList
                 nr("SocieteGestion")       = f.ResultSociete
                 nr("Editeur")              = f.ResultEditeur
                 nr("Num de voie")          = f.ResultNumVoie
@@ -424,8 +423,7 @@ Public Class PersonnesForm
                 dtRow("Genre")             = f.ResultGenre
                 dtRow("Role")              = String.Join("+", f.Roles)
                 dtRow("COAD")              = f.ResultCOAD
-                dtRow("IPI")               = f.ResultIPI
-                dtRow("IPI 2")             = f.ResultIPI2
+                dtRow("IPI_LIST")          = f.ResultIPIList
                 dtRow("SocieteGestion")    = f.ResultSociete
                 dtRow("Editeur")           = f.ResultEditeur
                 dtRow("Num de voie")       = f.ResultNumVoie
@@ -508,14 +506,20 @@ Public Class PersonnesForm
 
         Dim current(cols.Length - 1) As String
         For i = 0 To cols.Length - 1
-            current(i) = dtRow(i).ToString()
+            If dt.Columns.Contains(cols(i)) Then
+                current(i) = If(dtRow(cols(i)) IsNot Nothing, dtRow(cols(i)).ToString(), "")
+            Else
+                current(i) = ""
+            End If
         Next
 
         Using f As New FichePersonneForm(cols, current, title)
             If f.ShowDialog() = DialogResult.OK Then
                 Dim vals As String() = f.GetValues()
                 For i = 0 To cols.Length - 1
-                    dtRow(i) = vals(i)
+                    If dt.Columns.Contains(cols(i)) Then
+                        dtRow(cols(i)) = vals(i)
+                    End If
                 Next
                 grid.DataSource = dt
                 SetColWidths(grid)
@@ -585,7 +589,9 @@ Public Class PersonnesForm
         Next
         For r = 0 To dt.Rows.Count - 1
             For c = 0 To cols.Length - 1
-                ws.Cells(r + 2, c + 1).Value = dt.Rows(r)(c).ToString()
+                If dt.Columns.Contains(cols(c)) Then
+                    ws.Cells(r + 2, c + 1).Value = dt.Rows(r)(cols(c)).ToString()
+                End If
             Next
         Next
     End Sub

@@ -59,6 +59,7 @@ Public Class MainForm
     Private WithEvents btnAjouter As Button
     Private WithEvents btnCalculer As Button
     Private WithEvents btnGererFiches As Button
+    Private WithEvents btnSACEM As Button
     Private WithEvents dgv As DataGridView
     Private WithEvents cmsGrille As ContextMenuStrip
     Private WithEvents mnuSupprimer As ToolStripMenuItem
@@ -317,6 +318,9 @@ Public Class MainForm
 
         btnGererFiches = MkBtn("Gerer les fiches BDD", 486, 40, 160, Color.FromArgb(107, 60, 157))
         pnlAD.Controls.Add(btnGererFiches)
+
+        btnSACEM = MkBtn("Répertoire SACEM", 654, 40, 150, Color.FromArgb(20, 60, 140))
+        pnlAD.Controls.Add(btnSACEM)
 
         lstResultats = New ListBox()
         lstResultats.Location = New Point(12, 70)
@@ -653,6 +657,7 @@ Public Class MainForm
 
         ' ── Événements ───────────────────────────────────────────
         AddHandler Me.Load, AddressOf MainForm_Load
+        AddHandler Me.FormClosing, AddressOf MainForm_FormClosing
         AddHandler btnSelectJson.Click, AddressOf BtnSelectJson_Click
         AddHandler btnChargerJson.Click, AddressOf BtnChargerJson_Click
         AddHandler btnSauvegarder.Click, AddressOf BtnSauvegarder_Click
@@ -664,6 +669,7 @@ Public Class MainForm
         AddHandler btnAjouter.Click, AddressOf BtnAjouter_Click
         AddHandler btnCalculer.Click, AddressOf BtnCalculer_Click
         AddHandler btnGererFiches.Click, AddressOf BtnGererFiches_Click
+        AddHandler btnSACEM.Click, AddressOf BtnSACEM_Click
         AddHandler dgv.MouseUp, AddressOf Dgv_MouseUp
         AddHandler dgv.MouseMove, AddressOf Dgv_MouseMove
         AddHandler dgv.MouseDown, AddressOf Dgv_MouseDown
@@ -688,6 +694,28 @@ Public Class MainForm
     ' CHARGEMENT
     ' ─────────────────────────────────────────────────────────────
     Private Sub MainForm_Load(sender As Object, e As EventArgs)
+        ' Restaurer position/taille/état de la fenêtre via registre
+        Try
+            Dim key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("SOFTWARE\SACEMGenerator")
+            If key IsNot Nothing Then
+                Dim state As String = TryCast(key.GetValue("WindowState"), String)
+                If state = "Normal" Then
+                    Me.WindowState = FormWindowState.Normal
+                    Dim x As Integer = CInt(key.GetValue("WindowX", Me.Location.X))
+                    Dim y As Integer = CInt(key.GetValue("WindowY", Me.Location.Y))
+                    Dim w As Integer = CInt(key.GetValue("WindowW", Me.Size.Width))
+                    Dim h As Integer = CInt(key.GetValue("WindowH", Me.Size.Height))
+                    If w > 100 AndAlso h > 100 Then
+                        Me.Location = New Point(x, y)
+                        Me.Size = New Size(w, h)
+                    End If
+                End If
+                key.Close()
+            End If
+        Catch
+            ' Ignore — premier lancement
+        End Try
+
         ' MinSize et SplitterDistance définis après affichage (taille réelle disponible)
         splitMain.Panel1MinSize = 290
         splitMain.Panel2MinSize = 430
@@ -700,6 +728,22 @@ Public Class MainForm
         ConfigureGridColumns()
         ChargerGoogleSheet()
         BtnClearLog_Click(Nothing, Nothing)
+    End Sub
+
+    Private Sub MainForm_FormClosing(sender As Object, e As FormClosingEventArgs)
+        Try
+            Dim key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("SOFTWARE\SACEMGenerator")
+            key.SetValue("WindowState", Me.WindowState.ToString())
+            If Me.WindowState = FormWindowState.Normal Then
+                key.SetValue("WindowX", Me.Location.X)
+                key.SetValue("WindowY", Me.Location.Y)
+                key.SetValue("WindowW", Me.Size.Width)
+                key.SetValue("WindowH", Me.Size.Height)
+            End If
+            key.Close()
+        Catch
+            ' Ignore
+        End Try
     End Sub
 
     ' ─────────────────────────────────────────────────────────────
@@ -922,8 +966,11 @@ Public Class MainForm
                 MessageBox.Show($"Template PDF BDO introuvable:{vbCrLf}{bdoTemplatePath}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return
             End If
+            Dim subFolder As String = CleanFileName($"{_currentData.Titre}_{_currentData.Interprete}")
+            Dim outputDir As String = Path.Combine(_outputDirectory, subFolder)
+            If Not Directory.Exists(outputDir) Then Directory.CreateDirectory(outputDir)
             Dim outputFileName As String = CleanFileName($"BDO_{_currentData.Titre}_{_currentData.Interprete}.pdf")
-            Dim outputPath As String = Path.Combine(_outputDirectory, outputFileName)
+            Dim outputPath As String = Path.Combine(outputDir, outputFileName)
             SynchroniserVersData()
             Dim generator As New BDOPdfGenerator(_currentData)
             Dim success As Boolean = generator.Generate(bdoTemplatePath, outputPath)
@@ -941,7 +988,14 @@ Public Class MainForm
 
     Private Sub BtnGenerateContracts_Click(sender As Object, e As EventArgs)
         Try
-            txtLog.AppendText($"{vbCrLf}=== GENERATION CONTRATS ==={vbCrLf}")
+            ' Choix du format de sortie
+            Dim format As FormatSortie
+            Using dlgFmt As New FormChoixFormat()
+                If dlgFmt.ShowDialog() <> DialogResult.OK Then Return
+                format = dlgFmt.FormatChoisi
+            End Using
+
+            txtLog.AppendText($"{vbCrLf}=== GENERATION CONTRATS ({format}) ==={vbCrLf}")
             Dim templates As New Dictionary(Of String, String) From {
                 {"CCDAA", Path.Combine(_templatesDirectory, "CCDAA_template.docx")},
                 {"CCEOM", Path.Combine(_templatesDirectory, "CCEOM_template_univ.docx")}
@@ -954,6 +1008,7 @@ Public Class MainForm
             Else
                 txtLog.AppendText($"ℹ COED non généré : un seul éditeur (pas de coédition){vbCrLf}")
             End If
+
             Dim missing As New List(Of String)
             For Each kvp In templates
                 If Not File.Exists(kvp.Value) Then missing.Add(kvp.Key)
@@ -962,21 +1017,85 @@ Public Class MainForm
                 MessageBox.Show($"Templates manquants:{vbCrLf}{String.Join(vbCrLf, missing)}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return
             End If
+
+            Dim subFolder As String = CleanFileName($"{_currentData.Titre}_{_currentData.Interprete}")
+            Dim outputDir As String = Path.Combine(_outputDirectory, subFolder)
+            If Not Directory.Exists(outputDir) Then Directory.CreateDirectory(outputDir)
+
+            Dim docxGeneres As New List(Of String)
+
             For Each kvp In templates
-                Dim outputPath As String = Path.Combine(_outputDirectory, CleanFileName($"{kvp.Key}_{_currentData.Titre}_{_currentData.Interprete}.docx"))
+                Dim baseName As String = CleanFileName($"{kvp.Key}_{_currentData.Titre}_{_currentData.Interprete}")
+                Dim docxPath As String = Path.Combine(outputDir, baseName & ".docx")
                 txtLog.AppendText($"Generation {kvp.Key}...{vbCrLf}")
                 SynchroniserVersData()
                 Dim contractGenerator As New ContractGenerator(_currentData, _paragraphReader)
-                Dim success As Boolean = contractGenerator.Generate(kvp.Value, outputPath, kvp.Key)
+                Dim success As Boolean = contractGenerator.Generate(kvp.Value, docxPath, kvp.Key)
                 For Each logEntry In contractGenerator.GenerationLog : txtLog.AppendText($"  {logEntry}{vbCrLf}") : Next
                 txtLog.AppendText(If(success, $"{kvp.Key} genere OK{vbCrLf}", $"Echec {kvp.Key}{vbCrLf}"))
+                If success Then docxGeneres.Add(docxPath)
             Next
-            MessageBox.Show("Generation des contrats terminee.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+            ' Conversion PDF si demandée
+            If format = FormatSortie.PdfUniquement OrElse format = FormatSortie.DocxEtPdf Then
+                txtLog.AppendText($"Conversion PDF...{vbCrLf}")
+                For Each docxPath As String In docxGeneres
+                    Dim pdfPath As String = Path.ChangeExtension(docxPath, ".pdf")
+                    Dim errPdf As String = ConvertirDocxEnPdf(docxPath, pdfPath)
+                    If String.IsNullOrEmpty(errPdf) Then
+                        txtLog.AppendText($"  PDF OK : {Path.GetFileName(pdfPath)}{vbCrLf}")
+                        ' Supprimer le DOCX si PDF uniquement
+                        If format = FormatSortie.PdfUniquement Then
+                            Try : File.Delete(docxPath) : Catch : End Try
+                        End If
+                    Else
+                        txtLog.AppendText($"  PDF ECHEC ({Path.GetFileName(docxPath)}) : {errPdf}{vbCrLf}")
+                    End If
+                Next
+            End If
+
+            MessageBox.Show("Génération des contrats terminée.", "Terminé", MessageBoxButtons.OK, MessageBoxIcon.Information)
         Catch ex As Exception
             txtLog.AppendText($"ERREUR: {ex.Message}{vbCrLf}")
             MessageBox.Show($"Erreur:{vbCrLf}{ex.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
+
+    ''' <summary>
+    ''' Convertit un fichier DOCX en PDF via Word Interop.
+    ''' Retourne "" si succès, message d'erreur sinon.
+    ''' </summary>
+    Private Function ConvertirDocxEnPdf(docxPath As String, pdfPath As String) As String
+        Dim wordApp As Object = Nothing
+        Dim doc As Object = Nothing
+        Try
+            wordApp = CreateObject("Word.Application")
+            wordApp.Visible = False
+            doc = wordApp.Documents.Open(docxPath, ReadOnly:=True)
+            ' wdFormatPDF = 17
+            doc.SaveAs2(pdfPath, FileFormat:=17)
+            Return ""
+        Catch ex As Exception
+            Return ex.Message
+        Finally
+            Try
+                If doc IsNot Nothing Then doc.Close(SaveChanges:=False)
+            Catch
+            End Try
+            Try
+                If wordApp IsNot Nothing Then wordApp.Quit()
+            Catch
+            End Try
+            Try
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(doc)
+            Catch
+            End Try
+            Try
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp)
+            Catch
+            End Try
+        End Try
+    End Function
 
     Private Sub BtnGenerateAll_Click(sender As Object, e As EventArgs)
         txtLog.AppendText($"{vbCrLf}{New String("="c, 40)}{vbCrLf}=== GENERATION COMPLETE ==={vbCrLf}{New String("="c, 40)}{vbCrLf}")
@@ -1175,6 +1294,12 @@ Public Class MainForm
         End Using
         ChargerGoogleSheet()
         SyncGridAvecSheet()
+    End Sub
+
+    Private Sub BtnSACEM_Click(sender As Object, e As EventArgs)
+        Using f As New FormRecherchePublicSACEM()
+            f.ShowDialog(Me)
+        End Using
     End Sub
 
     Private Sub SyncGridAvecSheet()
@@ -1377,13 +1502,40 @@ Public Class MainForm
         Dim genre As String = If(cbGenre.SelectedItem IsNot Nothing, cbGenre.SelectedItem.ToString(), cbGenre.Text)
         Dim role As String = SafeStr(foundRow, "Role")
         role = AjusterRole(role, genre)
-        If String.IsNullOrEmpty(role) Then
-            Dim roles As New List(Of String)(RolesPossibles(genre))
-            Using f As New FormRoles(roles)
+
+        ' Détecter si le rôle doit être précisé :
+        ' - vide → ambigu (genre non déterminant)
+        ' - A+C ou AC → à éclater en A ou C selon le contexte
+        Dim roleAmbigu As Boolean = String.IsNullOrEmpty(role) OrElse
+                                    role.ToUpper() = "A+C" OrElse
+                                    role.ToUpper() = "AC"
+        Dim rolesDisponibles As New List(Of String)()
+        If roleAmbigu Then
+            If role.ToUpper() = "A+C" OrElse role.ToUpper() = "AC" Then
+                rolesDisponibles.Add("A")
+                rolesDisponibles.Add("C")
+                rolesDisponibles.Add("A+C")
+            Else
+                rolesDisponibles.AddRange(RolesPossibles(genre))
+            End If
+        End If
+
+        ' Détecter si un éditeur défaut existe
+        Dim editeurDefaut As String = If(foundRow.Table.Columns.Contains("Editeur"), SafeStr(foundRow, "Editeur"), "")
+        Dim hasEditeurDefaut As Boolean = Not String.IsNullOrEmpty(editeurDefaut)
+
+        ' Si rôle ambigu ET pas d'éditeur défaut → FormChoixEditeur gère tout
+        ' Si rôle ambigu ET éditeur défaut → FormRoles seul
+        ' Si rôle connu → pas de dialog rôle
+        If roleAmbigu AndAlso Not hasEditeurDefaut Then
+            ' Le FormChoixEditeur posera les deux questions (rôle + éditeur)
+        ElseIf roleAmbigu Then
+            Using f As New FormRoles(rolesDisponibles)
                 If f.ShowDialog() <> DialogResult.OK Then Return
                 role = f.SelectedRole
             End Using
         End If
+
         Dim nr As DataRow = DtDepotCreateur.NewRow()
         nr("Id") = SafeStr(foundRow, "Id")
         nr("Type") = "Physique"
@@ -1398,11 +1550,10 @@ Public Class MainForm
         nr("COAD_IPI") = GetCOADIPI(foundRow)
         nr("Signataire") = True
         CopierAdresseContact(nr, foundRow)
-        nr("_EditeurDefaut") = If(foundRow.Table.Columns.Contains("Editeur"), SafeStr(foundRow, "Editeur"), "")
-        Dim editeurDefaut As String = If(foundRow.Table.Columns.Contains("Editeur"), SafeStr(foundRow, "Editeur"), "")
+        nr("_EditeurDefaut") = editeurDefaut
         DtDepotCreateur.Rows.Add(nr)
         nr("Lettrage") = GetNextLetter()
-        If Not String.IsNullOrEmpty(editeurDefaut) Then
+        If hasEditeurDefaut Then
             Dim entrees() As String = editeurDefaut.Split(";"c)
             Dim editeurIds As New List(Of String)()
             Dim partsExplicites As New Dictionary(Of String, Double)()
@@ -1425,23 +1576,37 @@ Public Class MainForm
                 AjouterEditeurParDefaut(eid, nr, partsExplicites(eid) / 100.0)
             Next
         Else
-            If DtDepotCreateur.AsEnumerable().Any(Function(r) MoteurRepartition.IsEditeur(r("Role").ToString())) Then
-                If MessageBox.Show("Voulez-vous etre Editeur A Compte d'Auteur (EAC) ?",
-                                   "EAC ?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
-                    Dim nrEAC As DataRow = DtDepotCreateur.NewRow()
-                    nrEAC("Id") = nr("Id")
-                    nrEAC("Type") = "Physique"
-                    nrEAC("Designation") = nr("Designation").ToString() & " (EAC)"
-                    nrEAC("Nom") = nr("Nom")
-                    nrEAC("Prenom") = nr("Prenom")
-                    nrEAC("Role") = "AEC"
-                    nrEAC("Lettrage") = nr("Lettrage")
-                    nrEAC("SocieteGestion") = nr("SocieteGestion")
-                    nrEAC("Signataire") = True
-                    CopierAdresseContact(nrEAC, foundRow)
-                    DtDepotCreateur.Rows.Add(nrEAC)
+            ' Aucun éditeur défaut → FormChoixEditeur (inclut choix rôle si ambigu)
+            Using dlg As New FormChoixEditeur(DtPersonMor, If(roleAmbigu, rolesDisponibles, New List(Of String)()))
+                If dlg.ShowDialog() = DialogResult.OK Then
+                    ' Appliquer le rôle si choisi dans le dialog
+                    If Not String.IsNullOrEmpty(dlg.RoleChoisi) Then
+                        nr("Role") = dlg.RoleChoisi
+                    End If
+                    Select Case dlg.Choix
+                        Case ChoixEditeurType.PartInedite
+                            ' Rien à faire — l'AC reste sans éditeur (part inédite)
+                        Case ChoixEditeurType.EAC
+                            Dim nrEAC As DataRow = DtDepotCreateur.NewRow()
+                            nrEAC("Id") = nr("Id")
+                            nrEAC("Type") = "Physique"
+                            nrEAC("Designation") = nr("Designation").ToString() & " (EAC)"
+                            nrEAC("Nom") = nr("Nom")
+                            nrEAC("Prenom") = nr("Prenom")
+                            nrEAC("Role") = "AEC"
+                            nrEAC("Lettrage") = nr("Lettrage")
+                            nrEAC("SocieteGestion") = nr("SocieteGestion")
+                            nrEAC("Signataire") = True
+                            CopierAdresseContact(nrEAC, foundRow)
+                            DtDepotCreateur.Rows.Add(nrEAC)
+                        Case ChoixEditeurType.ChoisirEditeur
+                            AjouterEditeurParDefaut(dlg.EditeurId, nr, 1.0)
+                    End Select
+                Else
+                    ' Annulé → supprimer la ligne AC ajoutée
+                    DtDepotCreateur.Rows.Remove(nr)
                 End If
-            End If
+            End Using
         End If
     End Sub
 
@@ -2183,43 +2348,43 @@ Public Class MainForm
                     Try : srcRow(cols(i)) = res(i) : Catch : End Try
                 Next
             End If
-            Dim iId     As Integer = Array.IndexOf(cols, "Id")
+            Dim iId As Integer = Array.IndexOf(cols, "Id")
             Dim iPseudo As Integer = Array.IndexOf(cols, "Pseudonyme")
-            Dim iNom    As Integer = Array.IndexOf(cols, "Nom")
+            Dim iNom As Integer = Array.IndexOf(cols, "Nom")
             Dim iPrenom As Integer = Array.IndexOf(cols, "Prenom")
-            Dim iGenre  As Integer = Array.IndexOf(cols, "Genre")
-            Dim iRole   As Integer = Array.IndexOf(cols, "Role")
-            Dim iCOAD   As Integer = Array.IndexOf(cols, "COAD")
-            Dim iIPI    As Integer = Array.IndexOf(cols, "IPI")
-            Dim iSG     As Integer = Array.IndexOf(cols, "SocieteGestion")
-            Dim iNumV   As Integer = Array.IndexOf(cols, "Num de voie")
-            Dim iTypV   As Integer = Array.IndexOf(cols, "Type de voie")
-            Dim iNomV   As Integer = Array.IndexOf(cols, "Nom de voie")
-            Dim iCP     As Integer = Array.IndexOf(cols, "CP")
-            Dim iVille  As Integer = Array.IndexOf(cols, "Ville")
-            Dim iMail   As Integer = Array.IndexOf(cols, "Mail")
-            Dim iTel    As Integer = Array.IndexOf(cols, "Tel")
+            Dim iGenre As Integer = Array.IndexOf(cols, "Genre")
+            Dim iRole As Integer = Array.IndexOf(cols, "Role")
+            Dim iCOAD As Integer = Array.IndexOf(cols, "COAD")
+            Dim iIPI As Integer = Array.IndexOf(cols, "IPI")
+            Dim iSG As Integer = Array.IndexOf(cols, "SocieteGestion")
+            Dim iNumV As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim iTypV As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim iNomV As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim iCP As Integer = Array.IndexOf(cols, "CP")
+            Dim iVille As Integer = Array.IndexOf(cols, "Ville")
+            Dim iMail As Integer = Array.IndexOf(cols, "Mail")
+            Dim iTel As Integer = Array.IndexOf(cols, "Tel")
             If iPseudo >= 0 Then row("Pseudonyme") = res(iPseudo)
-            If iNom    >= 0 Then row("Nom")        = res(iNom)
-            If iPrenom >= 0 Then row("Prenom")     = res(iPrenom)
-            If iGenre  >= 0 Then row("Genre")      = res(iGenre)
-            If iRole   >= 0 AndAlso row("Role").ToString().Trim().ToUpper() <> "AEC" Then row("Role") = res(iRole)
+            If iNom >= 0 Then row("Nom") = res(iNom)
+            If iPrenom >= 0 Then row("Prenom") = res(iPrenom)
+            If iGenre >= 0 Then row("Genre") = res(iGenre)
+            If iRole >= 0 AndAlso row("Role").ToString().Trim().ToUpper() <> "AEC" Then row("Role") = res(iRole)
             Dim coad As String = If(iCOAD >= 0, res(iCOAD).Trim(), "")
-            Dim ipi  As String = If(iIPI  >= 0, res(iIPI).Trim(), "")
+            Dim ipi As String = If(iIPI >= 0, res(iIPI).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            If iSG   >= 0 Then row("SocieteGestion") = res(iSG)
-            If iNumV >= 0 Then row("NumVoie")        = res(iNumV)
-            If iTypV >= 0 Then row("TypeVoie")       = res(iTypV)
-            If iNomV >= 0 Then row("NomVoie")        = res(iNomV)
-            If iCP   >= 0 Then row("CP")             = res(iCP)
-            If iVille >= 0 Then row("Ville")         = res(iVille)
-            If iMail >= 0 Then row("Mail")           = res(iMail)
-            If iTel  >= 0 Then row("Tel")            = res(iTel)
-            Dim nom2    As String = If(iNom    >= 0, res(iNom).Trim(), "")
+            If iSG >= 0 Then row("SocieteGestion") = res(iSG)
+            If iNumV >= 0 Then row("NumVoie") = res(iNumV)
+            If iTypV >= 0 Then row("TypeVoie") = res(iTypV)
+            If iNomV >= 0 Then row("NomVoie") = res(iNomV)
+            If iCP >= 0 Then row("CP") = res(iCP)
+            If iVille >= 0 Then row("Ville") = res(iVille)
+            If iMail >= 0 Then row("Mail") = res(iMail)
+            If iTel >= 0 Then row("Tel") = res(iTel)
+            Dim nom2 As String = If(iNom >= 0, res(iNom).Trim(), "")
             Dim prenom2 As String = If(iPrenom >= 0, res(iPrenom).Trim(), "")
             Dim pseudo2 As String = If(iPseudo >= 0, res(iPseudo).Trim(), "")
             Dim desigBase As String = If(Not String.IsNullOrEmpty(pseudo2),
@@ -2290,47 +2455,47 @@ Public Class MainForm
                     Try : srcRow(cols(i)) = res(i) : Catch : End Try
                 Next
             End If
-            Dim iDesig  As Integer = Array.IndexOf(cols, "Designation")
-            Dim iCOAD   As Integer = Array.IndexOf(cols, "COAD")
-            Dim iIPI    As Integer = Array.IndexOf(cols, "IPI")
-            Dim iFJ     As Integer = Array.IndexOf(cols, "Forme Juridique")
-            Dim iCap    As Integer = Array.IndexOf(cols, "Capital")
-            Dim iRCS    As Integer = Array.IndexOf(cols, "RCS")
-            Dim iSiren  As Integer = Array.IndexOf(cols, "Siren")
-            Dim iSG     As Integer = Array.IndexOf(cols, "SocieteGestion")
-            Dim iNumV   As Integer = Array.IndexOf(cols, "Num de voie")
-            Dim iTypV   As Integer = Array.IndexOf(cols, "Type de voie")
-            Dim iNomV   As Integer = Array.IndexOf(cols, "Nom de voie")
-            Dim iCP     As Integer = Array.IndexOf(cols, "CP")
-            Dim iVille  As Integer = Array.IndexOf(cols, "Ville")
-            Dim iPrenR  As Integer = Array.IndexOf(cols, "Prenom representant")
-            Dim iNomR   As Integer = Array.IndexOf(cols, "Nom representant")
-            Dim iFoncR  As Integer = Array.IndexOf(cols, "Fonction representant")
-            Dim iMail   As Integer = Array.IndexOf(cols, "Mail")
-            Dim iTel    As Integer = Array.IndexOf(cols, "Tel")
+            Dim iDesig As Integer = Array.IndexOf(cols, "Designation")
+            Dim iCOAD As Integer = Array.IndexOf(cols, "COAD")
+            Dim iIPI As Integer = Array.IndexOf(cols, "IPI")
+            Dim iFJ As Integer = Array.IndexOf(cols, "Forme Juridique")
+            Dim iCap As Integer = Array.IndexOf(cols, "Capital")
+            Dim iRCS As Integer = Array.IndexOf(cols, "RCS")
+            Dim iSiren As Integer = Array.IndexOf(cols, "Siren")
+            Dim iSG As Integer = Array.IndexOf(cols, "SocieteGestion")
+            Dim iNumV As Integer = Array.IndexOf(cols, "Num de voie")
+            Dim iTypV As Integer = Array.IndexOf(cols, "Type de voie")
+            Dim iNomV As Integer = Array.IndexOf(cols, "Nom de voie")
+            Dim iCP As Integer = Array.IndexOf(cols, "CP")
+            Dim iVille As Integer = Array.IndexOf(cols, "Ville")
+            Dim iPrenR As Integer = Array.IndexOf(cols, "Prenom representant")
+            Dim iNomR As Integer = Array.IndexOf(cols, "Nom representant")
+            Dim iFoncR As Integer = Array.IndexOf(cols, "Fonction representant")
+            Dim iMail As Integer = Array.IndexOf(cols, "Mail")
+            Dim iTel As Integer = Array.IndexOf(cols, "Tel")
             If iDesig >= 0 Then row("Designation") = res(iDesig)
             Dim coad As String = If(iCOAD >= 0, res(iCOAD).Trim(), "")
-            Dim ipi  As String = If(iIPI  >= 0, res(iIPI).Trim(), "")
+            Dim ipi As String = If(iIPI >= 0, res(iIPI).Trim(), "")
             If Not String.IsNullOrEmpty(coad) Then
                 row("COAD_IPI") = "COAD : " & coad
             ElseIf Not String.IsNullOrEmpty(ipi) Then
                 row("COAD_IPI") = "IPI : " & ipi
             End If
-            If iFJ    >= 0 Then row("FormeJuridique")       = res(iFJ)
-            If iCap   >= 0 Then row("Capital")              = res(iCap)
-            If iRCS   >= 0 Then row("RCS")                  = res(iRCS)
-            If iSiren >= 0 Then row("Siren")                = res(iSiren)
-            If iSG    >= 0 Then row("SocieteGestion")       = res(iSG)
-            If iNumV  >= 0 Then row("NumVoie")              = res(iNumV)
-            If iTypV  >= 0 Then row("TypeVoie")             = res(iTypV)
-            If iNomV  >= 0 Then row("NomVoie")              = res(iNomV)
-            If iCP    >= 0 Then row("CP")                   = res(iCP)
-            If iVille >= 0 Then row("Ville")                = res(iVille)
-            If iPrenR >= 0 Then row("PrenomRepresentant")   = res(iPrenR)
-            If iNomR  >= 0 Then row("NomRepresentant")      = res(iNomR)
+            If iFJ >= 0 Then row("FormeJuridique") = res(iFJ)
+            If iCap >= 0 Then row("Capital") = res(iCap)
+            If iRCS >= 0 Then row("RCS") = res(iRCS)
+            If iSiren >= 0 Then row("Siren") = res(iSiren)
+            If iSG >= 0 Then row("SocieteGestion") = res(iSG)
+            If iNumV >= 0 Then row("NumVoie") = res(iNumV)
+            If iTypV >= 0 Then row("TypeVoie") = res(iTypV)
+            If iNomV >= 0 Then row("NomVoie") = res(iNomV)
+            If iCP >= 0 Then row("CP") = res(iCP)
+            If iVille >= 0 Then row("Ville") = res(iVille)
+            If iPrenR >= 0 Then row("PrenomRepresentant") = res(iPrenR)
+            If iNomR >= 0 Then row("NomRepresentant") = res(iNomR)
             If iFoncR >= 0 Then row("FonctionRepresentant") = res(iFoncR)
-            If iMail  >= 0 Then row("Mail")                 = res(iMail)
-            If iTel   >= 0 Then row("Tel")                  = res(iTel)
+            If iMail >= 0 Then row("Mail") = res(iMail)
+            If iTel >= 0 Then row("Tel") = res(iTel)
             SauvegarderXlsxSilencieux()
             dgv.Refresh()
             ApplyRowColors()
@@ -2452,9 +2617,16 @@ Public Class MainForm
 
     Private Function GetCOADIPI(row As DataRow) As String
         Dim coad As String = SafeStr(row, "COAD")
-        Dim ipi As String = SafeStr(row, "IPI")
         If Not String.IsNullOrEmpty(coad) Then Return "COAD : " & coad
-        If Not String.IsNullOrEmpty(ipi) Then Return "IPI : " & ipi
+        ' Lire premier IPI depuis IPI_LIST (format: Roles|IPI|Nom;...)
+        Dim ipiList As String = SafeStr(row, "IPI_LIST")
+        If Not String.IsNullOrEmpty(ipiList) Then
+            Dim firstEntry = ipiList.Split(";"c)(0)
+            Dim parts = firstEntry.Split("|"c)
+            If parts.Length > 1 AndAlso Not String.IsNullOrEmpty(parts(1).Trim()) Then
+                Return "IPI : " & parts(1).Trim()
+            End If
+        End If
         Return ""
     End Function
 
@@ -2486,11 +2658,15 @@ Public Class MainForm
         dest("NomRepresentant") = SafeStr(source, "Nom representant")
         dest("FonctionRepresentant") = SafeStr(source, "Fonction representant")
         Dim coad As String = SafeStr(source, "COAD")
-        Dim ipi As String = SafeStr(source, "IPI")
+        Dim ipiList As String = SafeStr(source, "IPI_LIST")
         If Not String.IsNullOrEmpty(coad) Then
             dest("COAD_IPI") = "COAD : " & coad
-        ElseIf Not String.IsNullOrEmpty(ipi) Then
-            dest("COAD_IPI") = "IPI : " & ipi
+        ElseIf Not String.IsNullOrEmpty(ipiList) Then
+            Dim firstEntry = ipiList.Split(";"c)(0)
+            Dim parts = firstEntry.Split("|"c)
+            If parts.Length > 1 AndAlso Not String.IsNullOrEmpty(parts(1).Trim()) Then
+                dest("COAD_IPI") = "IPI : " & parts(1).Trim()
+            End If
         End If
     End Sub
 

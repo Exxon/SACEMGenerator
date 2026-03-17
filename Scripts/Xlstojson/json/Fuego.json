@@ -1,0 +1,56 @@
+﻿{
+  "Titre": "Fuego",
+  "SousTitre": "",
+  "Interprete": "Riski",
+  "Duree": "2:50",
+  "Genre": "Chant",
+  "Date": "30/03/2018",
+  "ISWC": "",
+  "Lieu": "Deezer / Spotify / Amazon Music / Youtube/ Apple Music",
+  "Territoire": "Monde",
+  "Arrangement": "",
+  "Inegalitaire": "TRUE",
+  "Declaration": "ETAT MAJOR",
+  "Format": "ETAT MAJOR",
+  "Faita": "Paris",
+  "Faitle": "09/03/2026",
+  "Commentaire": "",
+  "AyantsDroit": [
+    {
+      "Id": "P00190",
+      "Role": "C",
+      "Lettrage": "A",
+      "PH": "12.5",
+      "DE": "16.667",
+      "DR": "12.5",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "IPI : 00673857006"
+    },
+    {
+      "Id": "M00023",
+      "Role": "E",
+      "Lettrage": "A",
+      "PH": "12.5",
+      "DE": "8.333",
+      "DR": "12.5",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "COAD : 1470897"
+    },
+    {
+      "Id": "P00194",
+      "Role": "A",
+      "Lettrage": "C",
+      "PH": "50",
+      "DE": "50",
+      "DR": "50",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": false,
+      "COAD_IPI": "IPI : 00153928652"
+    }
+  ]
+}

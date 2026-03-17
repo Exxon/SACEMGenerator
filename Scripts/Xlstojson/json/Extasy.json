@@ -1,0 +1,56 @@
+﻿{
+  "Titre": "Extasy",
+  "SousTitre": "",
+  "Interprete": "Lize",
+  "Duree": "2:40",
+  "Genre": "Chant",
+  "Date": "10/03/2017",
+  "ISWC": "",
+  "Lieu": "Deezer / Spotify / Amazon Music / Youtube/ Apple Music",
+  "Territoire": "Monde",
+  "Arrangement": "",
+  "Inegalitaire": "TRUE",
+  "Declaration": "54 PUBLISHING",
+  "Format": "54 PUBLISHING",
+  "Faita": "Paris",
+  "Faitle": "09/03/2026",
+  "Commentaire": "",
+  "AyantsDroit": [
+    {
+      "Id": "M00085",
+      "Role": "E",
+      "Lettrage": "A",
+      "PH": "25",
+      "DE": "16.667",
+      "DR": "25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": ""
+    },
+    {
+      "Id": "P00197",
+      "Role": "C",
+      "Lettrage": "B",
+      "PH": "50",
+      "DE": "50",
+      "DR": "50",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "IPI : 01067186642"
+    },
+    {
+      "Id": "P00196",
+      "Role": "A",
+      "Lettrage": "A",
+      "PH": "25",
+      "DE": "33.333",
+      "DR": "25",
+      "Managelic": "",
+      "Managesub": "",
+      "Signataire": true,
+      "COAD_IPI": "IPI : 00840618738"
+    }
+  ]
+}

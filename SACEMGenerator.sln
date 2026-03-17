@@ -8,6 +8,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{822534FE-7502-440C-B350-6400D16F8F61}"
 	ProjectSection(SolutionItems) = preProject
 		JsonEditorForm.vb = JsonEditorForm.vb
+		MainForm.vb = MainForm.vb
 	EndProjectSection
 EndProject
 Global

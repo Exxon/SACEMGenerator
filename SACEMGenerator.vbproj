@@ -92,6 +92,12 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="FormChoixEditeur.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FormChoixFormat.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="MainForm.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -128,6 +134,9 @@
     <Compile Include="Services\SACEMJsonReader.vb" />
     <Compile Include="Services\SuperbaliseGenerator.vb" />
     <Compile Include="Services\TableGenerator.vb" />
+    <Compile Include="FormRecherchePublicSACEM.vb">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="My Project\Resources.resx">
@@ -166,18 +175,12 @@
     </None>
     <None Include="App.config" />
     <None Include="packages.config" />
-    <Content Include="templates\CCDAA_template.docx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="templates\CCEOM_template_univ.docx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="templates\COED_template_univ.docx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="templates\template_paragrahs.docx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Include="templates\CCDAA_template.docx" />
+    <None Include="templates\CCEOM_template_univ.docx" />
+    <None Include="templates\COED_template_univ.docx" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Scripts\Xlstojson\json\" />
