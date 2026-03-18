@@ -56,8 +56,8 @@ Public Class FormRecherchePublicSACEM
     Private _ignoreNextDone As Boolean = False   ' True = ignorer le prochain "done" (mode détails)
     Private _enrichOffset As Integer = 0  ' nb d'oeuvres déjà dans _dt avant la requête en cours
 
-    ' Stats par requête : (nom, nouvelles, doublons)
-    Private _statsParRequete As New List(Of Tuple(Of String, Integer, Integer, Integer))()  ' nom, nouv, dbl, totalSACEM
+    ' Stats par requête : (nom, nouvelles, doublons, totalSACEM, exclus, intra)
+    Private _statsParRequete As New List(Of Tuple(Of String, Integer, Integer, Integer, Integer, Integer))()  ' nom, nouv, dbl, totalSACEM, exclus, intra
     Private _currentReqNom As String = ""
     Private _currentReqTotal As Integer = 0   ' total annoncé par SACEM pour la requête en cours
     Private _currentReqNouv As Integer = 0
@@ -763,7 +763,16 @@ Public Class FormRecherchePublicSACEM
         _lastQuery = query
         _lastFiltre = filtre
 
-        LancerProcess($" --query ""{query}"" --filtre {filtre} --sans-details")
+        ' Si des oeuvres ont déjà été récupérées → passer les clés connues via stdin
+        ' pour que Python filtre les doublons avant de les émettre
+        If _tokensConnus.Count > 0 Then
+            Dim stdinContent As String = String.Join(Environment.NewLine, _tokensConnus)
+            Dim fullArgs As String = $" --query ""{query}"" --filtre {filtre} --sans-details --exclusions-stdin"
+            AddLog($"[EXCL] {_tokensConnus.Count} clé(s) transmises à Python")
+            LancerProcessAvecStdin(fullArgs, stdinContent)
+        Else
+            LancerProcess($" --query ""{query}"" --filtre {filtre} --sans-details")
+        End If
     End Sub
 
     Private Sub TxtQuery_KeyDown(sender As Object, e As KeyEventArgs)
@@ -893,10 +902,12 @@ Public Class FormRecherchePublicSACEM
             Case "done"
                 ' Si _enrichTotal > 0 → done du process --details-seulement → ignorer
                 If _ignoreNextDone Then _ignoreNextDone = False : Return
-                _statsParRequete.Add(Tuple.Create(_currentReqNom, _currentReqNouv, _currentReqDbl, _currentReqTotal))
+                Dim nbExclus As Integer = CInt(If(jo("exclus"), 0))
+                Dim nbIntra As Integer = CInt(If(jo("intra"), 0))
+                _statsParRequete.Add(Tuple.Create(_currentReqNom, _currentReqNouv, _currentReqDbl, _currentReqTotal, nbExclus, nbIntra))
                 Dim nbNouv As Integer = _oeuvres.Count - _enrichOffset
                 Dim n As Integer = CInt(If(jo("total_filtre_ipi"), 0))
-                AddLog($"[OK] ""{_currentReqNom}"" : {_currentReqNouv} nouv. / {_currentReqDbl} doublons" &
+                AddLog($"[OK] ""{_currentReqNom}"" : {_currentReqNouv} nouv. / {nbExclus} communs / {nbIntra} intra" &
                        If(n > 0, $" · {n} IPI", ""))
                 AfficherStatLabel()
 
@@ -929,6 +940,11 @@ Public Class FormRecherchePublicSACEM
                         MajLblInfo()
                     End If
                 End If
+
+            Case "intra"
+                Dim titreDbl As String = If(jo("titre")?.ToString(), "")
+                Dim cleDbl As String = If(jo("cle")?.ToString(), "")
+                AddLog($"[INTRA] ""{titreDbl}"" · cle={cleDbl}")
 
             Case "error"
                 Dim m As String = jo("message")?.ToString()
@@ -989,7 +1005,7 @@ Public Class FormRecherchePublicSACEM
 
     ' Format entrée : "438009074 : NOM [CODE]" (une personne par \n)
     ' Format sortie : "438009074 : NOM\n..." (tag [xxx] retiré)
-    Private Function NomsPropres(raw As String, roleCode As String) As String
+    Private Shared Function NomsPropres(raw As String, roleCode As String) As String
         If String.IsNullOrEmpty(raw) Then Return ""
         Dim result As New List(Of String)()
         For Each entry In raw.Split(Chr(10))
@@ -1265,7 +1281,6 @@ Public Class FormRecherchePublicSACEM
     Private Sub AfficherStatLabel()
         If _planRequetes.Count = 0 Then lblStats.Text = "" : Return
         Dim sb As New System.Text.StringBuilder()
-        Dim totalDbl As Integer = If(_planRequetes.Count > 1, _statsParRequete.Sum(Function(t) t.Item3), 0)
 
         sb.Append($"  {_planRequetes.Count} req.  ║")
 
@@ -1273,7 +1288,7 @@ Public Class FormRecherchePublicSACEM
             Dim nom As String = _planRequetes(i)
             sb.Append($"  {nom} : ")
             If i < _statsParRequete.Count Then
-                sb.Append($"{_statsParRequete(i).Item4} ✓")
+                sb.Append($"{_statsParRequete(i).Item2} ✓")
             ElseIf nom = _currentReqNom AndAlso _currentReqTotal > 0 Then
                 sb.Append($"{_currentReqNouv}/{_currentReqTotal}…")
             ElseIf _statTotaux.ContainsKey(nom) Then
@@ -1284,7 +1299,8 @@ Public Class FormRecherchePublicSACEM
         Next
 
         If _planRequetes.Count > 1 AndAlso _statsParRequete.Count >= 2 Then
-            sb.Append($"  ║  {totalDbl} commun(s)  ║  {_oeuvres.Count} total")
+            Dim communs As Integer = _statsParRequete.Sum(Function(t) t.Item5)
+            sb.Append($"  ║  {communs} commun(s)  ║  {_oeuvres.Count} total")
         ElseIf _planRequetes.Count > 1 AndAlso _oeuvres.Count > 0 Then
             sb.Append($"  ║  {_oeuvres.Count} total")
         End If
@@ -1306,8 +1322,8 @@ Public Class FormRecherchePublicSACEM
         If _modeDetails Then
             ' Fin du process --details-seulement : rien à faire, le grid est déjà mis à jour
             _modeDetails = False
-        ElseIf _oeuvres.Count > 0 Then
-            ' Fin de la recherche : peupler le grid d'un coup
+        ElseIf _oeuvres.Count > 0 AndAlso _dt.Rows.Count = 0 Then
+            ' Fin de la recherche : peupler le grid d'un coup (seulement si vide)
             lblProgress.Text = $"Chargement de {_oeuvres.Count} oeuvre(s)…"
             Application.DoEvents()
             _dt.BeginLoadData()
@@ -1434,6 +1450,93 @@ Public Class FormRecherchePublicSACEM
     ' ══════════════════════════════════════════════════════════════════════
     ' EXTRACTION RÔLES
     ' ══════════════════════════════════════════════════════════════════════
+    ' ── Extraction statique — utilisable depuis PersonneForm ──────────────
+    Public Shared Function NormaliserSansAccents(s As String) As String
+        If String.IsNullOrEmpty(s) Then Return ""
+        Dim normalized As String = s.Normalize(System.Text.NormalizationForm.FormD)
+        Dim sb As New System.Text.StringBuilder()
+        For Each c As Char In normalized
+            If System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) <>
+               System.Globalization.UnicodeCategory.NonSpacingMark Then
+                sb.Append(c)
+            End If
+        Next
+        Return sb.ToString()
+    End Function
+
+    Public Shared Function ExtraireEntries(
+            oeuvres As List(Of JObject),
+            termes As List(Of String)
+        ) As List(Of Tuple(Of String, String, List(Of String)))
+
+        If oeuvres Is Nothing OrElse oeuvres.Count = 0 Then
+            Return New List(Of Tuple(Of String, String, List(Of String)))()
+        End If
+        If termes Is Nothing Then termes = New List(Of String)()
+
+        Dim roleMap As New Dictionary(Of String, String) From {
+            {"auteurs", "A"}, {"compositeurs", "C"}, {"realisateurs", "RE"},
+            {"editeurs", "E"}, {"sous_editeurs", "SE"}, {"interpretes", "INT"}
+        }
+        Dim vus As New Dictionary(Of String, Tuple(Of String, String, List(Of String)))()
+
+        For Each oe As JObject In oeuvres
+            For Each kvp In roleMap
+                Dim cellValRaw As String = If(oe(kvp.Key)?.ToString(), "")
+                If String.IsNullOrEmpty(cellValRaw) Then Continue For
+                ' Appliquer NomsPropres pour nettoyer tags et filtrer par rôle
+                Dim roleCode As String = If(kvp.Value = "INT" OrElse kvp.Value = "E" OrElse kvp.Value = "SE", "", kvp.Value)
+                Dim cellVal As String = NomsPropres(cellValRaw, roleCode)
+                For Each entree In cellVal.Split(Chr(10))
+                    Dim e2 As String = entree.Trim()
+                    If String.IsNullOrEmpty(e2) Then Continue For
+                    Dim ipi As String = ""
+                    Dim nom As String = e2
+                    Dim sep As Integer = e2.IndexOf(" : ")
+                    If sep > 0 Then
+                        ipi = e2.Substring(0, sep).Trim()
+                        nom = e2.Substring(sep + 3).Trim()
+                    End If
+                    If String.IsNullOrEmpty(nom) Then Continue For
+                    ' Filtrer par termes si fournis (insensible casse + accents, ordre indépendant)
+                    If termes.Count > 0 Then
+                        Dim nomNorm As String = NormaliserSansAccents(nom.ToUpper())
+                        Dim match As Boolean = termes.Any(Function(t)
+                                                   Dim mots = NormaliserSansAccents(t.ToUpper()).Split(" "c).Where(Function(m) m.Length > 0).ToArray()
+                                                   Return mots.All(Function(m) nomNorm.Contains(m))
+                                               End Function)
+                        If Not match Then Continue For
+                    End If
+                    ' Clé : IPI si dispo, sinon mots du nom triés (ignore l'ordre NOM/PRÉNOM)
+                    Dim nomUp As String = System.Text.RegularExpressions.Regex.Replace(
+                        NormaliserSansAccents(nom.ToUpper()), "\s+", " ").Trim()
+                    Dim cleNom As String = String.Join(" ", nomUp.Split(" "c).OrderBy(Function(m) m))
+                    Dim cle As String = If(ipi <> "", ipi, cleNom)
+
+                    ' Si IPI présent mais une entrée sans IPI avec même nom existe déjà → fusionner
+                    If ipi <> "" AndAlso Not vus.ContainsKey(cle) AndAlso vus.ContainsKey(cleNom) Then
+                        ' Remplacer la clé nom par la clé IPI
+                        Dim existing = vus(cleNom)
+                        vus.Remove(cleNom)
+                        vus(cle) = Tuple.Create(ipi, nom, existing.Item3)
+                    End If
+                    If Not vus.ContainsKey(cle) Then
+                        vus(cle) = Tuple.Create(ipi, nom, New List(Of String)())
+                    Else
+                        ' Même clé → garder le nom le plus long (le plus complet)
+                        If nom.Length > vus(cle).Item2.Length Then
+                            vus(cle) = Tuple.Create(ipi, nom, vus(cle).Item3)
+                        End If
+                    End If
+                    If Not vus(cle).Item3.Contains(kvp.Value) Then
+                        vus(cle).Item3.Add(kvp.Value)
+                    End If
+                Next
+            Next
+        Next
+        Return New List(Of Tuple(Of String, String, List(Of String)))(vus.Values)
+    End Function
+
     Private Sub BtnExtraire_Click(sender As Object, e As EventArgs)
         ' Périmètre : toujours toutes les lignes du grid
         Dim rows As New List(Of DataRow)()
@@ -1492,9 +1595,24 @@ Public Class FormRecherchePublicSACEM
                         If Not termesRecherche.Any(Function(t4) nom.ToUpper().Contains(t4)) Then Continue For
                     End If
 
-                    Dim cle As String = ipi & "|" & nom.ToUpper()
+                    Dim nomUp2 As String = System.Text.RegularExpressions.Regex.Replace(
+                        NormaliserSansAccents(nom.ToUpper()), "\s+", " ").Trim()
+                    Dim cleNom2 As String = String.Join(" ", nomUp2.Split(" "c).OrderBy(Function(m) m))
+                    Dim cle As String = If(ipi <> "", ipi, cleNom2)
+
+                    ' Si IPI présent mais entrée sans IPI avec même nom existe → fusionner
+                    If ipi <> "" AndAlso Not vus.ContainsKey(cle) AndAlso vus.ContainsKey(cleNom2) Then
+                        Dim existing2 = vus(cleNom2)
+                        vus.Remove(cleNom2)
+                        vus(cle) = Tuple.Create(ipi, nom, existing2.Item3)
+                    End If
                     If Not vus.ContainsKey(cle) Then
                         vus(cle) = Tuple.Create(ipi, nom, New List(Of String)())
+                    Else
+                        ' Même IPI, noms différents → garder le nom le plus long (le plus complet)
+                        If ipi <> "" AndAlso nom.Length > vus(cle).Item2.Length Then
+                            vus(cle) = Tuple.Create(ipi, nom, vus(cle).Item3)
+                        End If
                     End If
                     If Not vus(cle).Item3.Contains(kvp.Value) Then
                         vus(cle).Item3.Add(kvp.Value)
@@ -1746,7 +1864,22 @@ Public Class FormExtraitRoles
     Private _entries As List(Of Tuple(Of String, String, List(Of String)))
     Private _cbAppliquer As Action(Of HashSet(Of String))
 
-    Public Sub New(entries As List(Of Tuple(Of String, String, List(Of String))), source As String, oeuvres As List(Of JObject), Optional cbAppliquer As Action(Of HashSet(Of String)) = Nothing)
+    ' Entrées cochées — accessibles après fermeture avec DialogResult.OK
+    Public ReadOnly Property EntriesCochees As List(Of Tuple(Of String, String, List(Of String)))
+        Get
+            Dim result As New List(Of Tuple(Of String, String, List(Of String)))()
+            If _lv Is Nothing Then Return result
+            For Each item As ListViewItem In _lv.CheckedItems
+                Dim idx As Integer = item.Index
+                If idx >= 0 AndAlso idx < _entries.Count Then
+                    result.Add(_entries(idx))
+                End If
+            Next
+            Return result
+        End Get
+    End Property
+
+    Public Sub New(entries As List(Of Tuple(Of String, String, List(Of String))), source As String, oeuvres As List(Of JObject), Optional cbAppliquer As Action(Of HashSet(Of String)) = Nothing, Optional modeIPI As Boolean = False)
         Me.Text = "Extrait des rôles"
         Me.Size = New Size(1060, 560)
         Me.MinimumSize = New Size(700, 350)
@@ -1846,6 +1979,7 @@ Public Class FormExtraitRoles
                                           item.Checked = Not tousCoches
                                       Next
                                   End Sub
+        btnTout.Visible     = Not modeIPI
         pBot.Controls.Add(btnTout)
 
         Dim btnSel As New Button()
@@ -1855,6 +1989,7 @@ Public Class FormExtraitRoles
         btnSel.FlatStyle = FlatStyle.Flat : btnSel.FlatAppearance.BorderSize = 0
         btnSel.Font = New Font("Segoe UI", 8.5F) : btnSel.Cursor = Cursors.Hand
         AddHandler btnSel.Click, AddressOf BtnSel_Click
+        btnSel.Visible = Not modeIPI
         pBot.Controls.Add(btnSel)
 
         Dim btnCopier As New Button()
@@ -1867,15 +2002,19 @@ Public Class FormExtraitRoles
                                         If _txtInfo.Text.Trim() = "" Then Return
                                         Clipboard.SetText(_txtInfo.Text)
                                     End Sub
+        btnCopier.Visible = Not modeIPI
         pBot.Controls.Add(btnCopier)
 
         Dim btnAppliquer As New Button()
-        btnAppliquer.Text = "Appliquer selection"
-        btnAppliquer.Location = New Point(450, 6) : btnAppliquer.Size = New Size(150, 26)
-        btnAppliquer.BackColor = Color.FromArgb(140, 60, 20) : btnAppliquer.ForeColor = Color.White
+        btnAppliquer.Text = If(modeIPI, "✔ Valider IPI", "Appliquer selection")
+        btnAppliquer.Location = New Point(If(modeIPI, 130, 450), 6)
+        btnAppliquer.Size = New Size(If(modeIPI, 160, 150), 26)
+        btnAppliquer.BackColor = If(modeIPI, Color.FromArgb(0, 120, 60), Color.FromArgb(140, 60, 20))
+        btnAppliquer.ForeColor = Color.White
         btnAppliquer.FlatStyle = FlatStyle.Flat : btnAppliquer.FlatAppearance.BorderSize = 0
-        btnAppliquer.Font = New Font("Segoe UI", 8.5F) : btnAppliquer.Cursor = Cursors.Hand
-        btnAppliquer.Enabled = (_cbAppliquer IsNot Nothing)
+        btnAppliquer.Font = New Font("Segoe UI", 8.5F, If(modeIPI, FontStyle.Bold, FontStyle.Regular))
+        btnAppliquer.Cursor = Cursors.Hand
+        btnAppliquer.Enabled = If(modeIPI, True, (_cbAppliquer IsNot Nothing))
         AddHandler btnAppliquer.Click, AddressOf BtnAppliquer_Click
         pBot.Controls.Add(btnAppliquer)
 
@@ -1963,6 +2102,12 @@ Public Class FormExtraitRoles
         Dim noms = NomsCoches()
         If noms.Count = 0 Then
             MessageBox.Show("Cochez au moins un nom.", "Appliquer", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+        ' Mode sélection IPI (depuis PersonneForm) : pas de callback, juste fermer OK
+        If _cbAppliquer Is Nothing Then
+            Me.DialogResult = DialogResult.OK
+            Me.Close()
             Return
         End If
         Dim cles As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)

@@ -7,84 +7,86 @@
 Imports System.IO
 Imports System.Windows.Forms
 Imports System.Drawing
+Imports System.Threading
+Imports System.Threading.Tasks
 Imports OfficeOpenXml
 
 Public Class PersonneForm
     Inherits Form
 
     ' ── Résultats publics ──────────────────────────────────────
-    Public ReadOnly Roles         As List(Of String)   ' A, C, AR, AD
-    Public ReadOnly Pseudonyme    As String
-    Public ReadOnly Nom           As String
-    Public ReadOnly Prenom        As String
-    Public ReadOnly Genre         As String
+    Public ReadOnly Roles As List(Of String)   ' A, C, AR, AD
+    Public ReadOnly Pseudonyme As String
+    Public ReadOnly Nom As String
+    Public ReadOnly Prenom As String
+    Public ReadOnly Genre As String
     Public ReadOnly SocieteGestion As String
-    Public ReadOnly COAD          As String
-    Public ReadOnly NumVoie       As String
-    Public ReadOnly TypeVoie      As String
-    Public ReadOnly NomVoie       As String
-    Public ReadOnly CP            As String
-    Public ReadOnly Ville         As String
-    Public ReadOnly Pays          As String
-    Public ReadOnly Mail          As String
-    Public ReadOnly Tel           As String
+    Public ReadOnly COAD As String
+    Public ReadOnly NumVoie As String
+    Public ReadOnly TypeVoie As String
+    Public ReadOnly NomVoie As String
+    Public ReadOnly CP As String
+    Public ReadOnly Ville As String
+    Public ReadOnly Pays As String
+    Public ReadOnly Mail As String
+    Public ReadOnly Tel As String
     Public ReadOnly DateNaissance As String
     Public ReadOnly LieuNaissance As String
-    Public ReadOnly NumSecu       As String
+    Public ReadOnly NumSecu As String
 
     ' ── Contexte grille (pour validation AR/AD) ───────────────
-    Private ReadOnly _aDejaAuteur      As Boolean
+    Private ReadOnly _aDejaAuteur As Boolean
     Private ReadOnly _aDejaCompositeur As Boolean
 
     ' ── Contrôles ─────────────────────────────────────────────
-    Private pnlMain        As Panel
-    Private lblTitre       As Label
-    Private lblErreur      As Label
+    Private pnlMain As Panel
+    Private lblTitre As Label
+    Private lblErreur As Label
 
     ' Rôles
-    Private cbAuteur       As CheckBox
-    Private cbCompositeur  As CheckBox
-    Private cbArrangeur    As CheckBox
-    Private cbAdaptateur   As CheckBox
+    Private cbAuteur As CheckBox
+    Private cbCompositeur As CheckBox
+    Private cbArrangeur As CheckBox
+    Private cbAdaptateur As CheckBox
 
     ' Identité
-    Private txtPseudo      As TextBox
-    Private txtNom         As TextBox
-    Private txtPrenom      As TextBox
-    Private cboGenre       As ComboBox
+    Private txtPseudo As TextBox
+    Private txtNom As TextBox
+    Private txtPrenom As TextBox
+    Private cboGenre As ComboBox
 
     ' Société
-    Private cboSociete     As ComboBox
+    Private cboSociete As ComboBox
 
     ' IPI (DGV)
-    Private dgvIPI         As DataGridView
-    Private _dtIPI         As DataTable
-    Private txtCOAD        As TextBox
+    Private dgvIPI As DataGridView
+    Private _dtIPI As DataTable
+    Private txtCOAD As TextBox
 
     ' Adresse
-    Private txtNumVoie     As TextBox
-    Private txtTypeVoie    As TextBox
-    Private txtNomVoie     As TextBox
-    Private txtCP          As TextBox
-    Private txtVille       As TextBox
-    Private txtPays        As TextBox
+    Private txtNumVoie As TextBox
+    Private txtTypeVoie As TextBox
+    Private txtNomVoie As TextBox
+    Private txtCP As TextBox
+    Private txtVille As TextBox
+    Private txtPays As TextBox
 
     ' Contact
-    Private txtMail        As TextBox
-    Private txtTel         As TextBox
+    Private txtMail As TextBox
+    Private txtTel As TextBox
 
     ' État civil
-    Private txtDateNaiss   As TextBox
-    Private txtLieuNaiss   As TextBox
-    Private txtNumSecu     As TextBox
+    Private txtDateNaiss As TextBox
+    Private txtLieuNaiss As TextBox
+    Private txtNumSecu As TextBox
 
     ' Éditeurs
-    Private txtEditeur     As TextBox
+    Private txtEditeur As TextBox
     Private _editeurValeur As String = ""   ' valeur brute XLSX "M00001:50;M00002:30"
 
     ' Boutons
-    Private btnOK          As Button
-    Private btnAnnuler     As Button
+    Private btnOK As Button
+    Private btnAnnuler As Button
 
     ' ── Sociétés de gestion ───────────────────────────────────
     Private Shared ReadOnly Societes As String() = {
@@ -145,7 +147,7 @@ Public Class PersonneForm
     ' ── Constructeur ──────────────────────────────────────────
     Public Sub New(aDejaAuteur As Boolean, aDejaCompositeur As Boolean,
                    Optional existingRow As DataRow = Nothing)
-        _aDejaAuteur      = aDejaAuteur
+        _aDejaAuteur = aDejaAuteur
         _aDejaCompositeur = aDejaCompositeur
         Roles = New List(Of String)()
         InitializeComponent()
@@ -154,17 +156,17 @@ Public Class PersonneForm
 
     ' ── UI ────────────────────────────────────────────────────
     Private Sub InitializeComponent()
-        Me.Text            = "Fiche Personne Physique"
-        Me.Size            = New Size(960, 590)
-        Me.StartPosition   = FormStartPosition.CenterParent
+        Me.Text = "Fiche Personne Physique"
+        Me.Size = New Size(960, 590)
+        Me.StartPosition = FormStartPosition.CenterParent
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
-        Me.MaximizeBox     = False
-        Me.MinimizeBox     = False
-        Me.BackColor       = Color.White
+        Me.MaximizeBox = False
+        Me.MinimizeBox = False
+        Me.BackColor = Color.White
 
         pnlMain = New Panel() With {
             .AutoScroll = False,
-            .Dock       = DockStyle.Fill
+            .Dock = DockStyle.Fill
         }
         Me.Controls.Add(pnlMain)
 
@@ -177,23 +179,23 @@ Public Class PersonneForm
 
         ' Titre
         lblTitre = New Label() With {
-            .Text      = "NOUVELLE PERSONNE PHYSIQUE",
-            .Font      = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Text = "NOUVELLE PERSONNE PHYSIQUE",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = Color.FromArgb(60, 0, 100),
-            .Location  = New Point(L, y),
-            .Size      = New Size(LW, 26)
+            .Location = New Point(L, y),
+            .Size = New Size(LW, 26)
         }
         pnlMain.Controls.Add(lblTitre)
         y += 30
 
         ' Erreur
         lblErreur = New Label() With {
-            .Text      = "",
+            .Text = "",
             .ForeColor = Color.DarkRed,
-            .Font      = New Font("Segoe UI", 8.5, FontStyle.Bold),
-            .Location  = New Point(L, y),
-            .Size      = New Size(LW, 34),
-            .Visible   = False
+            .Font = New Font("Segoe UI", 8.5, FontStyle.Bold),
+            .Location = New Point(L, y),
+            .Size = New Size(LW, 34),
+            .Visible = False
         }
         pnlMain.Controls.Add(lblErreur)
         y += 36
@@ -201,23 +203,23 @@ Public Class PersonneForm
         ' Roles
         y = AddSectionHeader(y, L, LW, "RÔLES")
         Dim pnlRoles As New Panel() With {
-            .Location  = New Point(L, y),
-            .Size      = New Size(LW, 28),
+            .Location = New Point(L, y),
+            .Size = New Size(LW, 28),
             .BackColor = Color.FromArgb(245, 240, 255)
         }
-        cbAuteur      = NewCheckBox("Auteur",      pnlRoles, 5)
+        cbAuteur = NewCheckBox("Auteur", pnlRoles, 5)
         cbCompositeur = NewCheckBox("Compositeur", pnlRoles, 130)
-        cbArrangeur   = NewCheckBox("Arrangeur",   pnlRoles, 255)
-        cbAdaptateur  = NewCheckBox("Adaptateur",  pnlRoles, 380)
+        cbArrangeur = NewCheckBox("Arrangeur", pnlRoles, 255)
+        cbAdaptateur = NewCheckBox("Adaptateur", pnlRoles, 380)
         pnlMain.Controls.Add(pnlRoles)
         y += 36
 
         ' Identite
         y = AddSectionHeader(y, L, LW, "IDENTITÉ")
         txtPseudo = AddField2("Pseudonyme", y, L, LW) : y += 26
-        txtNom    = AddField2("Nom *",      y, L, LW) : y += 26
-        txtPrenom = AddField2("Prénom *",   y, L, LW) : y += 26
-        cboGenre  = AddCombo2("Genre",      y, L, LW, {"MR", "MME", "Autre"}) : y += 26
+        txtNom = AddField2("Nom *", y, L, LW) : y += 26
+        txtPrenom = AddField2("Prénom *", y, L, LW) : y += 26
+        cboGenre = AddCombo2("Genre", y, L, LW, {"MR", "MME", "Autre"}) : y += 26
 
         ' Societe
         y = AddSectionHeader(y, L, LW, "SOCIÉTÉ DE GESTION")
@@ -226,83 +228,83 @@ Public Class PersonneForm
         ' Numeros
         y = AddSectionHeader(y, L, LW, "NUMÉROS")
         pnlMain.Controls.Add(New Label() With {
-            .Text      = "IPI : 11 chiffres max   COAD : 6 à 9 chiffres",
-            .Font      = New Font("Segoe UI", 7.5),
+            .Text = "IPI : 11 chiffres max   COAD : 6 à 9 chiffres",
+            .Font = New Font("Segoe UI", 7.5),
             .ForeColor = Color.Gray,
-            .Location  = New Point(L, y),
-            .Size      = New Size(LW, 13)
+            .Location = New Point(L, y),
+            .Size = New Size(LW, 13)
         })
         y += 14
 
         pnlMain.Controls.Add(New Label() With {
-            .Text     = "IPI(s)",
+            .Text = "IPI(s)",
             .Location = New Point(L, y + 2),
-            .Size     = New Size(120, 18),
-            .Font     = New Font("Segoe UI", 8.5)
+            .Size = New Size(120, 18),
+            .Font = New Font("Segoe UI", 8.5)
         })
 
         _dtIPI = New DataTable()
         _dtIPI.Columns.Add("Rôle(s)", GetType(String))
-        _dtIPI.Columns.Add("IPI",     GetType(String))
-        _dtIPI.Columns.Add("Nom",     GetType(String))
+        _dtIPI.Columns.Add("IPI", GetType(String))
+        _dtIPI.Columns.Add("Nom", GetType(String))
 
         dgvIPI = New DataGridView() With {
-            .Location              = New Point(L + 120, y),
-            .Size                  = New Size(350, 78),
-            .DataSource            = _dtIPI,
-            .AutoSizeColumnsMode   = DataGridViewAutoSizeColumnsMode.Fill,
-            .RowHeadersVisible     = False,
-            .AllowUserToAddRows    = False,
+            .Location = New Point(L + 120, y),
+            .Size = New Size(350, 78),
+            .DataSource = _dtIPI,
+            .AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            .RowHeadersVisible = False,
+            .AllowUserToAddRows = False,
             .AllowUserToDeleteRows = False,
-            .Font                  = New Font("Segoe UI", 8F),
-            .BorderStyle           = BorderStyle.FixedSingle,
-            .BackgroundColor       = Color.White,
-            .SelectionMode         = DataGridViewSelectionMode.FullRowSelect
+            .Font = New Font("Segoe UI", 8.0F),
+            .BorderStyle = BorderStyle.FixedSingle,
+            .BackgroundColor = Color.White,
+            .SelectionMode = DataGridViewSelectionMode.FullRowSelect
         }
         pnlMain.Controls.Add(dgvIPI)
 
         Dim btnIPIAdd As New Button() With {
-            .Text      = "+",
-            .Location  = New Point(L + 474, y),
-            .Size      = New Size(24, 24),
+            .Text = "+",
+            .Location = New Point(L + 474, y),
+            .Size = New Size(24, 24),
             .BackColor = Color.FromArgb(0, 120, 60),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
-            .Font      = New Font("Segoe UI", 8, FontStyle.Bold)
+            .Font = New Font("Segoe UI", 8, FontStyle.Bold)
         }
         Dim btnIPIDel As New Button() With {
-            .Text      = "−",
-            .Location  = New Point(L + 474, y + 27),
-            .Size      = New Size(24, 24),
+            .Text = "−",
+            .Location = New Point(L + 474, y + 27),
+            .Size = New Size(24, 24),
             .BackColor = Color.FromArgb(180, 30, 30),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
-            .Font      = New Font("Segoe UI", 8, FontStyle.Bold)
+            .Font = New Font("Segoe UI", 8, FontStyle.Bold)
         }
         Dim btnIPISACEM As New Button() With {
-            .Text      = "🔍",
-            .Location  = New Point(L + 474, y + 54),
-            .Size      = New Size(24, 24),
+            .Text = "🔍",
+            .Location = New Point(L + 474, y + 54),
+            .Size = New Size(24, 24),
             .BackColor = Color.FromArgb(20, 60, 140),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
-            .Font      = New Font("Segoe UI", 8)
+            .Font = New Font("Segoe UI", 8)
         }
         pnlMain.Controls.Add(btnIPIAdd)
         pnlMain.Controls.Add(btnIPIDel)
         pnlMain.Controls.Add(btnIPISACEM)
 
         AddHandler btnIPIAdd.Click, Sub(s, ev)
-            Dim nr As DataRow = _dtIPI.NewRow()
-            nr("Rôle(s)") = "" : nr("IPI") = "" : nr("Nom") = ""
-            _dtIPI.Rows.Add(nr)
-        End Sub
+                                        Dim nr As DataRow = _dtIPI.NewRow()
+                                        nr("Rôle(s)") = "" : nr("IPI") = "" : nr("Nom") = ""
+                                        _dtIPI.Rows.Add(nr)
+                                    End Sub
         AddHandler btnIPIDel.Click, Sub(s, ev)
-            If dgvIPI.SelectedRows.Count > 0 Then
-                Dim idx As Integer = dgvIPI.SelectedRows(0).Index
-                If idx >= 0 AndAlso idx < _dtIPI.Rows.Count Then _dtIPI.Rows.RemoveAt(idx)
-            End If
-        End Sub
+                                        If dgvIPI.SelectedRows.Count > 0 Then
+                                            Dim idx As Integer = dgvIPI.SelectedRows(0).Index
+                                            If idx >= 0 AndAlso idx < _dtIPI.Rows.Count Then _dtIPI.Rows.RemoveAt(idx)
+                                        End If
+                                    End Sub
         AddHandler btnIPISACEM.Click, AddressOf BtnIPISACEM_Click
 
         y += 82
@@ -311,34 +313,34 @@ Public Class PersonneForm
         ' Editeurs
         y = AddSectionHeader(y, L, LW, "ÉDITEURS ASSOCIÉS")
         pnlMain.Controls.Add(New Label() With {
-            .Text     = "Éditeur(s)",
+            .Text = "Éditeur(s)",
             .Location = New Point(L, y + 3),
-            .Size     = New Size(120, 18),
-            .Font     = New Font("Segoe UI", 8.5)
+            .Size = New Size(120, 18),
+            .Font = New Font("Segoe UI", 8.5)
         })
         txtEditeur = New TextBox() With {
-            .Location  = New Point(L + 120, y),
-            .Size      = New Size(370, 22),
-            .Font      = New Font("Segoe UI", 9),
-            .ReadOnly  = True,
+            .Location = New Point(L + 120, y),
+            .Size = New Size(370, 22),
+            .Font = New Font("Segoe UI", 9),
+            .ReadOnly = True,
             .BackColor = Color.White
         }
         Dim btnEditeur As New Button() With {
-            .Text      = "...",
-            .Location  = New Point(L + 494, y),
-            .Size      = New Size(36, 22),
+            .Text = "...",
+            .Location = New Point(L + 494, y),
+            .Size = New Size(36, 22),
             .FlatStyle = FlatStyle.Flat
         }
         pnlMain.Controls.Add(txtEditeur)
         pnlMain.Controls.Add(btnEditeur)
         AddHandler btnEditeur.Click, Sub(s, ev)
-            Using dlg As New EditeurListForm(_editeurValeur)
-                If dlg.ShowDialog() = DialogResult.OK Then
-                    _editeurValeur  = dlg.ValeurEditeurs
-                    txtEditeur.Text = dlg.NomEditeurs
-                End If
-            End Using
-        End Sub
+                                         Using dlg As New EditeurListForm(_editeurValeur)
+                                             If dlg.ShowDialog() = DialogResult.OK Then
+                                                 _editeurValeur = dlg.ValeurEditeurs
+                                                 txtEditeur.Text = dlg.NomEditeurs
+                                             End If
+                                         End Using
+                                     End Sub
 
         ' ════════════════════════════════════════
         ' COLONNE DROITE  x=590  w=340
@@ -349,61 +351,61 @@ Public Class PersonneForm
 
         ' Adresse
         yr = AddSectionHeader(yr, R, RW, "ADRESSE")
-        txtNumVoie  = AddField2("N° voie",     yr, R, RW) : yr += 26
-        txtTypeVoie = AddField2("Type voie",   yr, R, RW) : yr += 26
-        txtNomVoie  = AddField2("Nom voie",    yr, R, RW) : yr += 26
-        txtCP       = AddField2("Code postal", yr, R, RW) : yr += 26
-        txtVille    = AddField2("Ville",       yr, R, RW) : yr += 26
-        txtPays     = AddField2("Pays",        yr, R, RW) : yr += 26
+        txtNumVoie = AddField2("N° voie", yr, R, RW) : yr += 26
+        txtTypeVoie = AddField2("Type voie", yr, R, RW) : yr += 26
+        txtNomVoie = AddField2("Nom voie", yr, R, RW) : yr += 26
+        txtCP = AddField2("Code postal", yr, R, RW) : yr += 26
+        txtVille = AddField2("Ville", yr, R, RW) : yr += 26
+        txtPays = AddField2("Pays", yr, R, RW) : yr += 26
 
         ' Contact
         yr = AddSectionHeader(yr, R, RW, "CONTACT")
         pnlMain.Controls.Add(New Label() With {
-            .Text      = "Format : +33612345678",
-            .Font      = New Font("Segoe UI", 7.5),
+            .Text = "Format : +33612345678",
+            .Font = New Font("Segoe UI", 7.5),
             .ForeColor = Color.Gray,
-            .Location  = New Point(R, yr),
-            .Size      = New Size(RW, 13)
+            .Location = New Point(R, yr),
+            .Size = New Size(RW, 13)
         })
         yr += 14
-        txtMail = AddField2("E-mail",    yr, R, RW) : yr += 26
-        txtTel  = AddField2("Téléphone", yr, R, RW) : yr += 26
+        txtMail = AddField2("E-mail", yr, R, RW) : yr += 26
+        txtTel = AddField2("Téléphone", yr, R, RW) : yr += 26
 
         ' Etat civil
         yr = AddSectionHeader(yr, R, RW, "ÉTAT CIVIL")
         pnlMain.Controls.Add(New Label() With {
-            .Text      = "N° Sécu : 15 chiffres sans espace",
-            .Font      = New Font("Segoe UI", 7.5),
+            .Text = "N° Sécu : 15 chiffres sans espace",
+            .Font = New Font("Segoe UI", 7.5),
             .ForeColor = Color.Gray,
-            .Location  = New Point(R, yr),
-            .Size      = New Size(RW, 13)
+            .Location = New Point(R, yr),
+            .Size = New Size(RW, 13)
         })
         yr += 14
         txtDateNaiss = AddField2("Date naissance (JJ/MM/AAAA)", yr, R, RW) : yr += 26
-        txtLieuNaiss = AddField2("Lieu naissance",              yr, R, RW) : yr += 26
-        txtNumSecu   = AddField2("N° Sécurité sociale",         yr, R, RW) : yr += 26
+        txtLieuNaiss = AddField2("Lieu naissance", yr, R, RW) : yr += 26
+        txtNumSecu = AddField2("N° Sécurité sociale", yr, R, RW) : yr += 26
 
         ' Boutons OK / Annuler
         yr += 10
         btnOK = New Button() With {
-            .Text      = "OK",
-            .Location  = New Point(R + 120, yr),
-            .Size      = New Size(90, 28),
+            .Text = "OK",
+            .Location = New Point(R + 120, yr),
+            .Size = New Size(90, 28),
             .BackColor = Color.FromArgb(0, 120, 215),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
-            .Font      = New Font("Segoe UI", 9, FontStyle.Bold)
+            .Font = New Font("Segoe UI", 9, FontStyle.Bold)
         }
         btnAnnuler = New Button() With {
-            .Text      = "Annuler",
-            .Location  = New Point(R + 218, yr),
-            .Size      = New Size(90, 28),
+            .Text = "Annuler",
+            .Location = New Point(R + 218, yr),
+            .Size = New Size(90, 28),
             .FlatStyle = FlatStyle.Flat
         }
         pnlMain.Controls.Add(btnOK)
         pnlMain.Controls.Add(btnAnnuler)
 
-        AddHandler btnOK.Click,      AddressOf BtnOK_Click
+        AddHandler btnOK.Click, AddressOf BtnOK_Click
         AddHandler btnAnnuler.Click, Sub(s, e) Me.DialogResult = DialogResult.Cancel
         Me.AcceptButton = btnOK
         Me.CancelButton = btnAnnuler
@@ -413,13 +415,13 @@ Public Class PersonneForm
     ' Helpers UI — version 2 colonnes (x, w paramétrables)
     Private Function AddSectionHeader(y As Integer, x As Integer, w As Integer, title As String) As Integer
         pnlMain.Controls.Add(New Label() With {
-            .Text      = title,
-            .Font      = New Font("Segoe UI", 8, FontStyle.Bold),
+            .Text = title,
+            .Font = New Font("Segoe UI", 8, FontStyle.Bold),
             .ForeColor = Color.White,
             .BackColor = Color.FromArgb(60, 0, 100),
-            .Location  = New Point(x, y),
-            .Size      = New Size(w, 18),
-            .Padding   = New Padding(3, 1, 0, 0)
+            .Location = New Point(x, y),
+            .Size = New Size(w, 18),
+            .Padding = New Padding(3, 1, 0, 0)
         })
         Return y + 22
     End Function
@@ -427,15 +429,15 @@ Public Class PersonneForm
     Private Function AddField2(label As String, y As Integer, x As Integer, w As Integer) As TextBox
         Dim lblW As Integer = CInt(w * 0.38)
         pnlMain.Controls.Add(New Label() With {
-            .Text     = label,
+            .Text = label,
             .Location = New Point(x, y + 3),
-            .Size     = New Size(lblW, 18),
-            .Font     = New Font("Segoe UI", 8.5)
+            .Size = New Size(lblW, 18),
+            .Font = New Font("Segoe UI", 8.5)
         })
         Dim txt As New TextBox() With {
             .Location = New Point(x + lblW, y),
-            .Size     = New Size(w - lblW, 22),
-            .Font     = New Font("Segoe UI", 9)
+            .Size = New Size(w - lblW, 22),
+            .Font = New Font("Segoe UI", 9)
         }
         pnlMain.Controls.Add(txt)
         Return txt
@@ -445,15 +447,15 @@ Public Class PersonneForm
                                 items As String()) As ComboBox
         Dim lblW As Integer = CInt(w * 0.38)
         pnlMain.Controls.Add(New Label() With {
-            .Text     = label,
+            .Text = label,
             .Location = New Point(x, y + 3),
-            .Size     = New Size(lblW, 18),
-            .Font     = New Font("Segoe UI", 8.5)
+            .Size = New Size(lblW, 18),
+            .Font = New Font("Segoe UI", 8.5)
         })
         Dim cbo As New ComboBox() With {
-            .Location      = New Point(x + lblW, y),
-            .Size          = New Size(w - lblW, 22),
-            .Font          = New Font("Segoe UI", 9),
+            .Location = New Point(x + lblW, y),
+            .Size = New Size(w - lblW, 22),
+            .Font = New Font("Segoe UI", 9),
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
         cbo.Items.AddRange(items)
@@ -473,112 +475,309 @@ Public Class PersonneForm
     ' ── Recherche IPI dans répertoire SACEM ───────────────────
     Private Sub BtnIPISACEM_Click(sender As Object, e As EventArgs)
         Dim pseudo As String = If(txtPseudo IsNot Nothing, txtPseudo.Text.Trim(), "")
-        Dim nom    As String = If(txtNom    IsNot Nothing, txtNom.Text.Trim(),    "")
+        Dim nom As String = If(txtNom IsNot Nothing, txtNom.Text.Trim(), "")
         Dim prenom As String = If(txtPrenom IsNot Nothing, txtPrenom.Text.Trim(), "")
 
-        Dim query As String = String.Join(" ", {pseudo, nom, prenom}.Where(Function(s) Not String.IsNullOrEmpty(s)))
-        If String.IsNullOrEmpty(query) Then
-            MessageBox.Show("Saisir au moins Nom ou Prénom.", "Recherche SACEM", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Dim qNomPrenom As String = String.Join(" ", {nom, prenom}.Where(Function(s) Not String.IsNullOrEmpty(s)))
+        Dim queries As New List(Of String)()
+        If Not String.IsNullOrEmpty(qNomPrenom) Then queries.Add(qNomPrenom)
+        If Not String.IsNullOrEmpty(pseudo) AndAlso pseudo <> qNomPrenom Then queries.Add(pseudo)
+
+        If queries.Count = 0 Then
+            MessageBox.Show("Saisir au moins Nom/Prénom ou Pseudo.", "Recherche SACEM",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information)
             Return
         End If
 
-        ' Trouver le script Python
-        Dim scriptPath As String = IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "Scripts", "sacem_repertoire_public.py")
-        scriptPath = IO.Path.GetFullPath(scriptPath)
+        Dim scriptPath As String = IO.Path.GetFullPath(
+            IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "Scripts", "sacem_repertoire_public.py"))
         If Not IO.File.Exists(scriptPath) Then
-            MessageBox.Show("Script introuvable : " & scriptPath, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show("Script introuvable : " & scriptPath, "Erreur",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return
         End If
 
-        Dim results As New List(Of Tuple(Of String, String, String))() ' IPI, Nom, Roles
-        Dim errMsg As String = ""
-
-        Using dlgWait As New Form() With {
+        ' ── Boite de progression ──────────────────────────────
+        Dim dlgWait As New Form() With {
             .Text = "Recherche SACEM…",
-            .Size = New Size(340, 80),
+            .Size = New Size(480, 210),
             .StartPosition = FormStartPosition.CenterParent,
-            .FormBorderStyle = FormBorderStyle.FixedToolWindow
+            .FormBorderStyle = FormBorderStyle.FixedToolWindow,
+            .ControlBox = False,
+            .BackColor = Color.FromArgb(240, 245, 255)
         }
-            Dim lbl As New Label() With {
-                .Text = "Recherche en cours : " & query,
-                .Dock = DockStyle.Fill,
-                .TextAlign = ContentAlignment.MiddleCenter
-            }
-            dlgWait.Controls.Add(lbl)
-            dlgWait.Show(Me)
-            Application.DoEvents()
 
-            Try
-                Dim psi As New Diagnostics.ProcessStartInfo("python", $"""{scriptPath}"" --query ""{query}"" --json --max-pages 2") With {
-                    .RedirectStandardOutput = True,
-                    .RedirectStandardError  = True,
-                    .UseShellExecute        = False,
-                    .CreateNoWindow         = True
-                }
-                Using proc As Diagnostics.Process = Diagnostics.Process.Start(psi)
-                    Dim output As String = proc.StandardOutput.ReadToEnd()
-                    proc.WaitForExit(30000)
+        Dim nq As Integer = queries.Count
+        ' Ligne 1 : Requête en cours
+        Dim lblReq As New Label() With {
+            .Text = "Requête : —",
+            .Location = New Point(12, 10),
+            .Size = New Size(450, 18),
+            .Font = New Font("Segoe UI", 8.5F, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(20, 60, 140)
+        }
+        ' Ligne 2 : progression pages
+        Dim pb As New ProgressBar() With {
+            .Location = New Point(12, 32),
+            .Size = New Size(450, 16),
+            .Style = ProgressBarStyle.Marquee
+        }
+        ' Ligne 3 : nb oeuvres récupérées
+        Dim lblOeuvres As New Label() With {
+            .Text = "Oeuvres récupérées : 0",
+            .Location = New Point(12, 52),
+            .Size = New Size(450, 16),
+            .Font = New Font("Segoe UI", 8.0F),
+            .ForeColor = Color.FromArgb(40, 100, 40)
+        }
+        ' Séparateur
+        Dim sep As New Panel() With {
+            .Location = New Point(12, 74),
+            .Size = New Size(450, 1),
+            .BackColor = Color.FromArgb(180, 200, 230)
+        }
+        ' Ligne 4 : détails X/Y
+        Dim lblDetails As New Label() With {
+            .Text = "Détails : en attente…",
+            .Location = New Point(12, 80),
+            .Size = New Size(450, 16),
+            .Font = New Font("Segoe UI", 8.0F),
+            .ForeColor = Color.FromArgb(100, 60, 20)
+        }
+        ' Ligne 5 : titre en cours
+        Dim lblTitreCours As New Label() With {
+            .Text = "",
+            .Location = New Point(12, 100),
+            .Size = New Size(450, 16),
+            .Font = New Font("Segoe UI", 7.5F, FontStyle.Italic),
+            .ForeColor = Color.FromArgb(80, 80, 80)
+        }
+        ' Bouton annuler
+        Dim btnAnn As New Button() With {
+            .Text = "Annuler",
+            .Location = New Point(190, 128),
+            .Size = New Size(100, 28),
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 8.5F),
+            .BackColor = Color.FromArgb(160, 40, 40),
+            .ForeColor = Color.White
+        }
+        btnAnn.FlatAppearance.BorderSize = 0
+        dlgWait.Controls.AddRange({lblReq, pb, lblOeuvres, sep, lblDetails, lblTitreCours, btnAnn})
 
-                    ' Parser les lignes JSON
-                    Dim seen As New HashSet(Of String)()
-                    For Each line As String In output.Split(vbLf)
-                        Dim trimmed = line.Trim()
-                        If String.IsNullOrEmpty(trimmed) Then Continue For
-                        Try
-                            Dim jo = Newtonsoft.Json.Linq.JObject.Parse(trimmed)
-                            If jo("type")?.ToString() = "oeuvres" Then
-                                Dim oeuvres = jo("data")
-                                If oeuvres Is Nothing Then Continue For
-                                For Each oe In oeuvres
-                                    ' Extraire IPI de chaque ayant-droit
-                                    For Each role In {"auteurs", "compositeurs", "editeurs", "arrangeurs", "adaptateurs"}
-                                        Dim arr = oe(role)
-                                        If arr Is Nothing Then Continue For
-                                        For Each p In arr
-                                            Dim ipi  As String = p("ipi")?.ToString().Trim()
-                                            Dim pNom As String = p("nom")?.ToString().Trim()
-                                            Dim pRole As String = p("role")?.ToString().Trim()
-                                            If String.IsNullOrEmpty(ipi) OrElse String.IsNullOrEmpty(pNom) Then Continue For
-                                            ' Filtrer par nom/prénom
-                                            Dim pNomUp = pNom.ToUpper()
-                                            Dim match = (String.IsNullOrEmpty(nom) OrElse pNomUp.Contains(nom.ToUpper())) AndAlso
-                                                        (String.IsNullOrEmpty(prenom) OrElse pNomUp.Contains(prenom.ToUpper()))
-                                            If match AndAlso Not seen.Contains(ipi) Then
-                                                seen.Add(ipi)
-                                                results.Add(Tuple.Create(ipi, pNom, If(pRole, "")))
-                                            End If
-                                        Next
-                                    Next
-                                Next
-                            End If
-                        Catch
-                        End Try
-                    Next
-                End Using
-            Catch ex As Exception
-                errMsg = ex.Message
-            End Try
-            dlgWait.Close()
-        End Using
+        ' ── Recherche Python async sur thread séparé ──────────
+        Dim oeuvresAccumulees As New List(Of Newtonsoft.Json.Linq.JObject)()
+        Dim tokensConnus As New HashSet(Of String)()
+        Dim errMsg As String = ""
+        Dim cts As New CancellationTokenSource()
+        Dim _procCourant As Diagnostics.Process = Nothing
+        AddHandler btnAnn.Click, Sub(s, ev)
+                                     cts.Cancel()
+                                     Try
+                                         If _procCourant IsNot Nothing AndAlso Not _procCourant.HasExited Then
+                                             _procCourant.Kill()
+                                         End If
+                                     Catch
+                                     End Try
+                                 End Sub
+
+        ' Lancer la recherche sur un thread séparé via BeginOutputReadLine
+        Dim searchThread As New System.Threading.Thread(Sub()
+                                                            Dim qIdx As Integer = 0
+                                                            For Each q As String In queries
+                                                                qIdx += 1
+                                                                If cts.IsCancellationRequested OrElse errMsg <> "" Then Exit For
+
+                                                                dlgWait.Invoke(Sub()
+                                                                                   lblReq.Text = $"Requête {qIdx}/{nq} : {q}"
+                                                                                   pb.Style = ProgressBarStyle.Marquee
+                                                                                   lblDetails.Text = "Détails : en attente…"
+                                                                                   lblTitreCours.Text = ""
+                                                                               End Sub)
+
+                                                                Try
+                                                                    Dim useStdin As Boolean = tokensConnus.Count > 0
+                                                                    Dim args As String = $"""{scriptPath}"" --query ""{q}"" --filtre parties"
+                                                                    If useStdin Then args &= " --exclusions-stdin"
+
+                                                                    Dim psi As New Diagnostics.ProcessStartInfo("python", args) With {
+                        .RedirectStandardOutput = True,
+                        .RedirectStandardError = True,
+                        .RedirectStandardInput = useStdin,
+                        .UseShellExecute = False,
+                        .CreateNoWindow = True,
+                        .StandardOutputEncoding = System.Text.Encoding.UTF8,
+                        .StandardErrorEncoding = System.Text.Encoding.UTF8
+                    }
+
+                                                                    Dim proc As New Diagnostics.Process()
+                                                                    proc.StartInfo = psi
+                                                                    proc.EnableRaisingEvents = True
+                                                                    _procCourant = proc
+
+                                                                    Dim maxPage As Integer = 1
+                                                                    Dim curPage As Integer = 0
+                                                                    Dim totalDetail As Integer = 0
+                                                                    Dim doneDetail As Integer = 0
+
+                                                                    AddHandler proc.OutputDataReceived, Sub(ps, pe)
+                                                                                                            If pe.Data Is Nothing Then Return
+                                                                                                            Dim line As String = pe.Data.Trim()
+                                                                                                            If String.IsNullOrEmpty(line) Then Return
+                                                                                                            Try
+                                                                                                                Dim jo = Newtonsoft.Json.Linq.JObject.Parse(line)
+                                                                                                                Select Case jo("type")?.ToString()
+
+                                                                                                                    Case "pagination"
+                                                                                                                        maxPage = CInt(If(jo("max_page"), 1))
+                                                                                                                        Dim total = CInt(If(jo("total"), 0))
+                                                                                                                        dlgWait.Invoke(Sub()
+                                                                                                                                           pb.Style = ProgressBarStyle.Blocks
+                                                                                                                                           pb.Maximum = maxPage
+                                                                                                                                           pb.Value = 0
+                                                                                                                                           lblReq.Text = $"Requête {qIdx}/{nq} : {q}  —  {total} résultat(s) · {maxPage} page(s)"
+                                                                                                                                       End Sub)
+
+                                                                                                                    Case "oeuvres"
+                                                                                                                        curPage += 1
+                                                                                                                        Dim arr = TryCast(jo("oeuvres"), Newtonsoft.Json.Linq.JArray)
+                                                                                                                        If arr IsNot Nothing Then
+                                                                                                                            For Each oe As Newtonsoft.Json.Linq.JObject In arr
+                                                                                                                                Dim iswc As String = If(oe("iswc")?.ToString().Trim(), "")
+                                                                                                                                Dim titre As String = If(oe("titre")?.ToString().Trim().ToUpperInvariant(), "")
+                                                                                                                                Dim cle As String = If(iswc <> "", iswc, titre)
+                                                                                                                                SyncLock tokensConnus
+                                                                                                                                    If Not tokensConnus.Contains(cle) Then
+                                                                                                                                        tokensConnus.Add(cle)
+                                                                                                                                        oeuvresAccumulees.Add(oe)
+                                                                                                                                    End If
+                                                                                                                                End SyncLock
+                                                                                                                            Next
+                                                                                                                        End If
+                                                                                                                        Dim cp = curPage, mp = maxPage
+                                                                                                                        Dim cnt = oeuvresAccumulees.Count
+                                                                                                                        dlgWait.Invoke(Sub()
+                                                                                                                                           pb.Value = Math.Min(cp, pb.Maximum)
+                                                                                                                                           lblOeuvres.Text = $"Oeuvres récupérées : {cnt}  (page {cp}/{mp})"
+                                                                                                                                       End Sub)
+
+                                                                                                                    Case "detail"
+                                                                                                                        doneDetail += 1
+                                                                                                                        If totalDetail = 0 Then totalDetail = oeuvresAccumulees.Count
+                                                                                                                        Dim oed = TryCast(jo("oeuvre"), Newtonsoft.Json.Linq.JObject)
+                                                                                                                        If oed IsNot Nothing Then
+                                                                                                                            Dim tokD As String = If(oed("token")?.ToString(), "")
+                                                                                                                            If Not String.IsNullOrEmpty(tokD) Then
+                                                                                                                                SyncLock oeuvresAccumulees
+                                                                                                                                    For i As Integer = 0 To oeuvresAccumulees.Count - 1
+                                                                                                                                        If If(oeuvresAccumulees(i)("token")?.ToString(), "") = tokD Then
+                                                                                                                                            oeuvresAccumulees(i) = oed : Exit For
+                                                                                                                                        End If
+                                                                                                                                    Next
+                                                                                                                                End SyncLock
+                                                                                                                            End If
+                                                                                                                            Dim dd = doneDetail, td = Math.Max(totalDetail, 1)
+                                                                                                                            Dim titreD = If(oed("titre")?.ToString(), "")
+                                                                                                                            dlgWait.Invoke(Sub()
+                                                                                                                                               pb.Style = ProgressBarStyle.Blocks
+                                                                                                                                               pb.Maximum = td
+                                                                                                                                               pb.Value = Math.Min(dd, td)
+                                                                                                                                               lblDetails.Text = $"Détails : {dd}/{td}"
+                                                                                                                                               lblTitreCours.Text = titreD
+                                                                                                                                           End Sub)
+                                                                                                                        End If
+
+                                                                                                                    Case "error"
+                                                                                                                        errMsg = If(jo("message")?.ToString(), "Erreur inconnue")
+
+                                                                                                                    Case "done"
+                                                                                                                        ' process terminé — WaitForExit prend le relais
+
+                                                                                                                End Select
+                                                                                                            Catch
+                                                                                                            End Try
+                                                                                                        End Sub
+
+                                                                    proc.Start()
+
+                                                                    If useStdin Then
+                                                                        proc.StandardInput.Write(String.Join(Environment.NewLine, tokensConnus))
+                                                                        proc.StandardInput.Close()
+                                                                    End If
+
+                                                                    proc.BeginOutputReadLine()
+                                                                    proc.BeginErrorReadLine()
+
+                                                                    ' Attendre que le process soit complètement terminé
+                                                                    ' (garantit que tous les OutputDataReceived ont été traités)
+                                                                    proc.WaitForExit()
+                                                                    ' Petite pause pour laisser les derniers OutputDataReceived se traiter
+                                                                    System.Threading.Thread.Sleep(200)
+                                                                    proc.Dispose()
+
+                                                                Catch ex As Exception
+                                                                    errMsg = ex.Message
+                                                                End Try
+                                                            Next
+
+                                                            dlgWait.Invoke(Sub() dlgWait.Close())
+                                                        End Sub)
+        searchThread.IsBackground = True
+        AddHandler dlgWait.Load, Sub(s, ev) searchThread.Start()
+
+        dlgWait.ShowDialog(Me)   ' bloque le thread UI proprement — libéré par dlgWait.Close()
+        cts.Dispose()
+
+        If cts.IsCancellationRequested Then Return
 
         If errMsg <> "" Then
-            MessageBox.Show("Erreur : " & errMsg, "Recherche SACEM", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show("Erreur : " & errMsg, "Recherche SACEM",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return
         End If
-        If results.Count = 0 Then
-            MessageBox.Show("Aucun IPI trouvé pour : " & query, "Recherche SACEM", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        If oeuvresAccumulees.Count = 0 Then
+            MessageBox.Show($"Aucune oeuvre trouvée pour : {String.Join(" / ", queries)}",
+                            "Recherche SACEM", MessageBoxButtons.OK, MessageBoxIcon.Information)
             Return
         End If
 
-        ' Afficher le picker
-        Using picker As New FormIPISACEMPicker(results)
-            If picker.ShowDialog(Me) = DialogResult.OK Then
-                For Each entry In picker.SelectedEntries
-                    Dim nr As DataRow = _dtIPI.NewRow()
-                    nr("Rôle(s)") = entry.Item3
-                    nr("IPI")     = entry.Item1
-                    nr("Nom")     = entry.Item2
-                    _dtIPI.Rows.Add(nr)
+        ' ── Extraire entries filtrées mot par mot ─────────────
+        Dim termes As New List(Of String)()
+        For Each mot In String.Join(" ", {nom, prenom, pseudo}).
+                        Split(" "c).Select(Function(m) m.Trim()).
+                        Where(Function(m) m.Length > 1)
+            If Not termes.Contains(mot) Then termes.Add(mot)
+        Next
+        Dim entries = FormRecherchePublicSACEM.ExtraireEntries(oeuvresAccumulees, termes)
+        Dim source As String = $"{oeuvresAccumulees.Count} oeuvre(s) — {String.Join(" / ", queries)}"
+
+        If entries Is Nothing OrElse entries.Count = 0 Then
+            MessageBox.Show($"Aucun IPI trouvé pour : {String.Join(" / ", termes)}",
+                            "Recherche SACEM", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        ' ── FormExtraitRoles → sélection → peuple _dtIPI ─────
+        Using f As New FormExtraitRoles(entries, source, oeuvresAccumulees, Nothing, modeIPI:=True)
+            If f.ShowDialog(Me) = DialogResult.OK Then
+                For Each entry In f.EntriesCochees
+                    Dim ipiVal As String = entry.Item1
+                    Dim nomVal As String = entry.Item2
+                    Dim rolesVal As String = String.Join(",", entry.Item3)
+                    If String.IsNullOrEmpty(ipiVal) Then Continue For
+                    Dim existing As DataRow = _dtIPI.Rows.Cast(Of DataRow)().
+                                              FirstOrDefault(Function(r) r("IPI").ToString().Trim() = ipiVal)
+                    If existing IsNot Nothing Then
+                        ' Mettre à jour rôle et nom
+                        existing("Rôle(s)") = rolesVal
+                        existing("Nom") = nomVal
+                    Else
+                        Dim nr As DataRow = _dtIPI.NewRow()
+                        nr("Rôle(s)") = rolesVal
+                        nr("IPI")     = ipiVal
+                        nr("Nom")     = nomVal
+                        _dtIPI.Rows.Add(nr)
+                    End If
                 Next
             End If
         End Using

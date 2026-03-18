@@ -365,22 +365,54 @@ class SACEMRepertoire:
         ipi_filter:    Optional[list[str]] = None,
         tokens_exclus: Optional[set] = None,
         sans_details:  bool = False,
+        cles_exclues:  Optional[set] = None,
     ) -> ResultatRecherche:
         """
         Recherche complète via POST uniquement (plus de GET HTML initial).
         Émet les résultats sur stdout JSON ligne par ligne.
         tokens_exclus : tokens déjà enrichis par une requête précédente — skippés à l'enrichissement.
+        cles_exclues  : clés ISWC/titre déjà connues (inter-requêtes) — filtrées avant emit pour éviter doublons.
         """
         ipi_set     = {str(i).strip() for i in ipi_filter} if ipi_filter else None
         excl_set    = tokens_exclus or set()
+        vus         = set(cles_exclues) if cles_exclues else set()
+        cles_inter  = frozenset(vus)   # clés reçues via stdin = requêtes précédentes
+        inter_vus   = set()            # clés inter déjà comptées comme communes (évite double-comptage)
+        nb_exclus   = 0   # oeuvres communes inter-requêtes (dans cles_inter)
+        nb_intra    = 0   # doublons intra-requête (SACEM pagine mal)
         # "titles.parties" : query = "TITRE,CREATEUR" — SACEM accepte ce format
-        log.info(f"Recherche query={query!r} filtre={filtre!r} ipi={ipi_set} exclus={len(excl_set)}")
+        log.info(f"Recherche query={query!r} filtre={filtre!r} ipi={ipi_set} exclus={len(excl_set)} cles_exclues={len(vus)}")
+
+        def _cle(o: "Oeuvre") -> str:
+            return o.iswc.strip() if o.iswc.strip() else o.titre.strip().upper()
+
+        def _filtrer(oeuvres: list) -> list:
+            """Retire les oeuvres déjà vues, distingue inter vs intra."""
+            nonlocal nb_exclus, nb_intra
+            result = []
+            for o in oeuvres:
+                c = _cle(o)
+                if c in vus:
+                    if c in cles_inter and c not in inter_vus:
+                        nb_exclus += 1   # première occurrence commune inter-requêtes
+                        inter_vus.add(c)
+                        log.info(f"  [INTER] {o.titre!r} (cle={c!r})")
+                    else:
+                        nb_intra += 1    # doublon interne ou inter déjà compté
+                        log.info(f"  [INTRA] {o.titre!r} (cle={c!r})")
+                        SACEMRepertoire._emit("intra", titre=o.titre, cle=c)
+                else:
+                    vus.add(c)
+                    result.append(o)
+            return result
 
         # ── Page 1 : POST avec elPerPage=50 → total + maxPage fiables ────────
         oeuvres_p1, json_brut_p1, max_page = self._get_page_suivante(query, filtre, 1, get_max_page=True)
-        total  = self._last_total   # stocké par _get_page_suivante
+        total  = self._last_total
+        max_page = max_page or 1   # sécurité si SACEM ne retourne pas maxPage
         limite = min(max_page, self.max_pages) if self.max_pages else max_page
 
+        oeuvres_p1 = _filtrer(oeuvres_p1)
         self._marquer_ipi(oeuvres_p1, ipi_set)
 
         resultat = ResultatRecherche(
@@ -399,12 +431,13 @@ class SACEMRepertoire:
             log.info(f"  Page {page}/{limite}...")
             time.sleep(self.delay)
             oeuvres_page, json_brut, _ = self._get_page_suivante(query, filtre, page)
+            oeuvres_page = _filtrer(oeuvres_page)
             self._marquer_ipi(oeuvres_page, ipi_set)
             resultat.oeuvres.extend(oeuvres_page)
             resultat._source_pages[page] = json_brut
             self._emit("oeuvres", page=page, oeuvres=[o.to_dict() for o in oeuvres_page])
 
-        self._emit("done", total_recupere=resultat.total_recupere, total_filtre_ipi=resultat.total_filtre_ipi)
+        self._emit("done", total_recupere=resultat.total_recupere, total_filtre_ipi=resultat.total_filtre_ipi, exclus=nb_exclus, intra=nb_intra)
         log.info(f"Terminé. {resultat.total_recupere}/{total} oeuvres, {resultat.total_filtre_ipi} IPI match.")
 
         # ── Enrichissement IPI : GET détail pour chaque oeuvre ────────────────
@@ -650,6 +683,7 @@ if __name__ == "__main__":
     p.add_argument("--stat-seulement",    action="store_true")
     p.add_argument("--details-stdin",     action="store_true", help="Lire les TOKEN:TITRE:INDEX depuis stdin")
     p.add_argument("--details-seulement", nargs="*", default=None, metavar="TOKEN:TITRE:INDEX")
+    p.add_argument("--exclusions-stdin",  action="store_true", help="Lire les clés ISWC/titre à exclure depuis stdin (une par ligne)")
     args = p.parse_args()
 
     sacem = SACEMRepertoire(
@@ -726,9 +760,17 @@ if __name__ == "__main__":
                     log.warning(f"  [{idx}] détail échoué pour {tok}: {e}")
             SACEMRepertoire._emit("done", total_recupere=len(entrees), total_filtre_ipi=0)
         else:
+            cles_exclues: set = set()
+            if args.exclusions_stdin:
+                for line in sys.stdin.read().strip().split("\n"):
+                    line = line.strip()
+                    if line:
+                        cles_exclues.add(line)
+                log.info(f"Exclusions reçues via stdin : {len(cles_exclues)}")
             resultats = sacem.rechercher(query=args.query, filtre=args.filtre,
                                          ipi_filter=args.ipi,
-                                         sans_details=args.sans_details)
+                                         sans_details=args.sans_details,
+                                         cles_exclues=cles_exclues if cles_exclues else None)
             if args.csv:
                 sacem.export_csv(resultats,  args.csv,  seulement_ipi=args.seulement_ipi)
             if args.json:
